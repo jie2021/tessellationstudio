@@ -63,7 +63,8 @@ export default function App() {
   const [shapeType, setShapeType] = useState<ShapeType>('square');
   const [edgePaths, setEdgePaths] = useState<Record<number, Point[]>>({});
   const [activePoint, setActivePoint] = useState<{ edgeIdx: number; pointIdx: number } | null>(null);
-  const [color, setColor] = useState('#6366f1');
+  const [colorA, setColorA] = useState('#6366f1');
+  const [colorB, setColorB] = useState('#ffffff');
   const [showGrid, setShowGrid] = useState(true);
   const [zoom, setZoom] = useState(1);
   // Triangle symmetry mode: which edge maps to which
@@ -71,6 +72,10 @@ export default function App() {
   // 'ccw': edge i -> edge (i+1)%3 (60° CCW rotation around triangle center)
   const [triSymmetry, setTriSymmetry] = useState<'cw' | 'ccw'>('cw');
   const [useCurve, setUseCurve] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
+  const [demoStep, setDemoStep] = useState(0);
+  const demoIntervalRef = React.useRef<number | null>(null);
+  const [demoCenters, setDemoCenters] = useState<{cx:number, cy:number}[]>([]);
 
   const baseVertices = useMemo(() => getBaseVertices(shapeType), [shapeType]);
 
@@ -93,6 +98,72 @@ export default function App() {
   }, [shapeType, baseVertices, edgePaths]);
 
   const resetPaths = () => setEdgePaths({});
+
+  const stopDemo = () => {
+    setDemoMode(false);
+    setDemoStep(0);
+    if (demoIntervalRef.current) {
+      window.clearInterval(demoIntervalRef.current);
+      demoIntervalRef.current = null;
+    }
+  };
+
+  const startDemo = () => {
+    // Ensure triangle mode and reset editor
+    setShapeType('triangle');
+    // Use the current edited shape for the demo (do not reset paths)
+    // prepare demo centers (sorted by distance) and start at step 0
+    const s = RADIUS * Math.sqrt(3);
+    const stepX = s * 1.5;
+    const stepY = s * Math.sqrt(3);
+    const demoRange = 4;
+    const centers: {cx:number, cy:number}[] = [];
+    for (let row = -demoRange; row <= demoRange; row++) {
+      for (let col = -demoRange; col <= demoRange; col++) {
+        if (row === 0 && col === 0) continue;
+        const hexCX = col * stepX;
+        const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
+        centers.push({cx: hexCX, cy: hexCY});
+      }
+    }
+    centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
+    setDemoCenters(centers);
+    setDemoMode(true);
+    setDemoStep(0);
+  };
+
+  // cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (demoIntervalRef.current) {
+        window.clearInterval(demoIntervalRef.current);
+        demoIntervalRef.current = null;
+      }
+    };
+  }, []);
+
+  const nextDemoStep = () => {
+    const max = 6 + demoCenters.length;
+    setDemoStep(prev => Math.min(prev + 1, max));
+  };
+
+  const prevDemoStep = () => {
+    setDemoStep(prev => Math.max(prev - 1, 0));
+  };
+
+  const getDemoText = (step: number) => {
+    if (step === 0) return '데모 준비 중... (다음 버튼을 눌러 시작하세요)';
+    // Step 1: prepare the edited tile
+    if (step === 1) return '변형된 도형을 준비합니다.';
+    if (step >= 2 && step <= 6) {
+      const k = step - 1;
+      const angle = k * 60 * (triSymmetry === 'cw' ? 1 : -1);
+      return `기준점을 기준으로 ${angle}도 회전합니다.`;
+    }
+    const hexes = Math.max(0, step - 6);
+    if (hexes === 0) return '중앙 육각형 완성 — 다음 버튼을 눌러 주변 육각형을 하나씩 추가하세요.';
+    return `주변 육각형 #${hexes}는 밀어서 복사합니다.`;
+  };
 
   const handleMouseDown = (edgeIdx: number, pointIdx: number) => {
     setActivePoint({ edgeIdx, pointIdx });
@@ -221,7 +292,7 @@ export default function App() {
               key={`sq-${r}-${c}`}
               d={tilePathData}
               transform={`translate(${tx}, ${ty}) rotate(${rot}, ${CENTER}, ${CENTER})`}
-              fill={(r + c) % 2 === 0 ? color : '#ffffff'}
+              fill={(r + c) % 2 === 0 ? colorA : colorB}
               stroke="#000"
               strokeWidth="0.5"
             />
@@ -244,7 +315,7 @@ export default function App() {
               key={`hex-${r}-${c}`}
               d={tilePathData}
               transform={`translate(${worldX - CENTER}, ${worldY - CENTER}) rotate(${rot}, ${CENTER}, ${CENTER})`}
-              fill={((r + Math.abs(c)) % 3 + 3) % 3 === 0 ? color : ((r + Math.abs(c)) % 3 + 3) % 3 === 1 ? '#ffffff' : '#f3f4f6'}
+              fill={(((r + Math.abs(c)) % 3 + 3) % 3) === 0 ? colorA : colorB}
               stroke="#000"
               strokeWidth="0.5"
             />
@@ -320,30 +391,92 @@ export default function App() {
 
       const rotDir = triSymmetry === 'cw' ? 1 : -1;
 
-      // Color alternation for the 6 wedges: alternate by k parity
-      const wedgeColors = [color, '#ffffff', color, '#ffffff', color, '#ffffff'];
+      // Color alternation for the 6 wedges: alternate between primary and secondary
+      const wedgeColors = [colorA, colorB, colorA, colorB, colorA, colorB];
 
-      for (let row = -range; row < range; row++) {
-        for (let col = -range; col < range; col++) {
-          // Hex center in world space
-          const hexCX = col * stepX;
-          const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
+      if (demoMode) {
+        // Demo sequence: 0..6 build central hex one triangle at a time,
+        // then reveal surrounding hexagons one-by-one.
+        const centerHexCX = 0;
+        const centerHexCY = 0;
+        const tx0 = centerHexCX - pivotX;
+        const ty0 = centerHexCY - pivotY;
 
-          const tx = hexCX - pivotX;
-          const ty = hexCY - pivotY;
+        // show up to demoStep triangles on the central hex
+        const trianglesToShow = Math.min(6, demoStep);
+        for (let k = 0; k < trianglesToShow; k++) {
+          const angleDeg = k * rotDir * 60;
+          tiles.push(
+            <path
+              key={`demo-center-${k}`}
+              d={tilePathData}
+              transform={`translate(${tx0}, ${ty0}) rotate(${angleDeg}, ${pivotX}, ${pivotY})`}
+              fill={wedgeColors[k]}
+              stroke="#000"
+              strokeWidth="0.5"
+            />
+          );
+        }
 
-          for (let k = 0; k < 6; k++) {
-            const angleDeg = k * rotDir * 60;
-            tiles.push(
-              <path
-                key={`tri-${row}-${col}-${k}`}
-                d={tilePathData}
-                transform={`translate(${tx}, ${ty}) rotate(${angleDeg}, ${pivotX}, ${pivotY})`}
-                fill={wedgeColors[k]}
-                stroke="#000"
-                strokeWidth="0.5"
-              />
-            );
+        // Show pivot marker only when explaining rotation (steps 1..6)
+        if (demoStep >= 1 && demoStep <= 6) {
+          const pivotWorldX = pivotX + tx0;
+          const pivotWorldY = pivotY + ty0;
+          tiles.push(
+            <g key={`demo-pivot`} pointerEvents="none">
+              <circle cx={pivotWorldX} cy={pivotWorldY} r={8} fill="#ef4444" stroke="#fff" strokeWidth={2} />
+              <circle cx={pivotWorldX} cy={pivotWorldY} r={4} fill="#fff" />
+              <text x={pivotWorldX + 12} y={pivotWorldY + 4} fontSize={12} fill="#111" fontWeight={600}>기준점</text>
+            </g>
+          );
+        }
+
+        if (demoStep > 6) {
+          const hexToShow = demoStep - 6; // how many hexagons to reveal
+          const centersToShow = demoCenters.slice(0, Math.min(hexToShow, demoCenters.length));
+          for (let i = 0; i < centersToShow.length; i++) {
+            const { cx, cy } = centersToShow[i];
+            const tx = cx - pivotX;
+            const ty = cy - pivotY;
+            for (let k = 0; k < 6; k++) {
+              const angleDeg = k * rotDir * 60;
+              tiles.push(
+                <path
+                  key={`demo-hex-${i}-${k}`}
+                  d={tilePathData}
+                  transform={`translate(${tx}, ${ty}) rotate(${angleDeg}, ${pivotX}, ${pivotY})`}
+                  fill={wedgeColors[k]}
+                  stroke="#000"
+                  strokeWidth="0.5"
+                />
+              );
+            }
+          }
+        }
+        
+      } else {
+        for (let row = -range; row < range; row++) {
+          for (let col = -range; col < range; col++) {
+            // Hex center in world space
+            const hexCX = col * stepX;
+            const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
+
+            const tx = hexCX - pivotX;
+            const ty = hexCY - pivotY;
+
+            for (let k = 0; k < 6; k++) {
+              const angleDeg = k * rotDir * 60;
+              tiles.push(
+                <path
+                  key={`tri-${row}-${col}-${k}`}
+                  d={tilePathData}
+                  transform={`translate(${tx}, ${ty}) rotate(${angleDeg}, ${pivotX}, ${pivotY})`}
+                  fill={wedgeColors[k]}
+                  stroke="#000"
+                  strokeWidth="0.5"
+                />
+              );
+            }
           }
         }
       }
@@ -400,21 +533,50 @@ export default function App() {
               <Palette size={14} /> 2. 테마 색상
             </label>
             <div className="flex gap-3 flex-wrap">
-              {['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#141414'].map(c => (
-                <button
-                  key={c}
-                  onClick={() => setColor(c)}
-                  className={`w-10 h-10 rounded-xl border-4 transition-all hover:scale-110 active:scale-95 ${color === c ? 'border-white ring-2 ring-indigo-600 shadow-lg' : 'border-transparent shadow-sm'}`}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-              <div className="relative w-10 h-10 rounded-xl overflow-hidden border-2 border-neutral-100 shadow-sm hover:border-neutral-300 transition-colors">
-                <input 
-                  type="color" 
-                  value={color} 
-                  onChange={(e) => setColor(e.target.value)}
-                  className="absolute inset-0 w-full h-full scale-150 cursor-pointer"
-                />
+              <div className="flex flex-col gap-3">
+                <div>
+                  <div className="text-[10px] text-neutral-400 mb-2">Primary</div>
+                  <div className="flex gap-2">
+                    {['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6'].map(c => (
+                      <button
+                        key={c}
+                        onClick={() => setColorA(c)}
+                        className={`w-10 h-10 rounded-xl border-4 transition-all hover:scale-110 active:scale-95 ${colorA === c ? 'border-white ring-2 ring-indigo-600 shadow-lg' : 'border-transparent shadow-sm'}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                    <div className="relative w-10 h-10 rounded-xl overflow-hidden border-2 border-neutral-100 shadow-sm hover:border-neutral-300 transition-colors">
+                      <input 
+                        type="color" 
+                        value={colorA} 
+                        onChange={(e) => setColorA(e.target.value)}
+                        className="absolute inset-0 w-full h-full scale-150 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] text-neutral-400 mb-2">Secondary</div>
+                  <div className="flex gap-2">
+                    {['#ffffff', '#f3f4f6', '#fafafa', '#fde68a', '#d1fae5'].map(c => (
+                      <button
+                        key={c}
+                        onClick={() => setColorB(c)}
+                        className={`w-10 h-10 rounded-xl border-4 transition-all hover:scale-110 active:scale-95 ${colorB === c ? 'border-white ring-2 ring-indigo-600 shadow-lg' : 'border-transparent shadow-sm'}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                    <div className="relative w-10 h-10 rounded-xl overflow-hidden border-2 border-neutral-100 shadow-sm hover:border-neutral-300 transition-colors">
+                      <input 
+                        type="color" 
+                        value={colorB} 
+                        onChange={(e) => setColorB(e.target.value)}
+                        className="absolute inset-0 w-full h-full scale-150 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -488,6 +650,16 @@ export default function App() {
                 <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">3</div>
                 <p className="text-xs text-neutral-600 leading-relaxed">완성된 패턴을 저장하거나 초기화할 수 있습니다.</p>
               </div>
+              {shapeType === 'triangle' && (
+                <div className="mt-3">
+                  <button
+                    onClick={() => { demoMode ? stopDemo() : startDemo(); }}
+                    className={`w-full py-3 px-4 rounded-2xl font-bold text-sm transition-all ${demoMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                  >
+                    {demoMode ? '중지' : '설명하기'}
+                  </button>
+                </div>
+              )}
             </div>
           </section>
         </div>
@@ -559,9 +731,10 @@ export default function App() {
           </svg>
         </div>
 
-        {/* Editor Overlay */}
-        <div className="flex-1 flex items-center justify-center z-10 p-8 pointer-events-none">
-          <div className="relative pointer-events-auto">
+        {/* Editor Overlay (hidden during demo) */}
+        {!demoMode && (
+          <div className="flex-1 flex items-center justify-center z-10 p-8 pointer-events-none">
+            <div className="relative pointer-events-auto">
             <AnimatePresence mode="wait">
               <motion.div 
                 key={shapeType}
@@ -595,9 +768,9 @@ export default function App() {
                   {/* The Shape Path */}
                   <path 
                     d={tilePathData} 
-                    fill={color} 
+                    fill={colorA} 
                     fillOpacity="0.15"
-                    stroke={color} 
+                    stroke={colorA} 
                     strokeWidth="4"
                     strokeLinejoin="round"
                     className="transition-colors duration-300"
@@ -665,8 +838,34 @@ export default function App() {
             <div className="absolute -top-14 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white px-5 py-2.5 rounded-full shadow-xl border border-neutral-100 text-[10px] font-black tracking-[0.2em] text-neutral-400 uppercase">
               <Move size={12} className="text-indigo-600" /> Edge Editor
             </div>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Demo explanatory overlay */}
+        {demoMode && (
+          <div className="absolute inset-0 flex items-start justify-center pointer-events-none z-40">
+            <div className="mt-8 pointer-events-auto">
+              <AnimatePresence>
+                <motion.div
+                  key={`demo-text-${demoStep}`}
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.25 }}
+                  className="bg-white/95 px-5 py-3 rounded-2xl shadow-lg border border-neutral-100 text-sm font-medium text-neutral-700 flex items-center gap-3"
+                >
+                  <div>{getDemoText(demoStep)}</div>
+                  <div className="ml-2 flex items-center gap-2">
+                    <button onClick={prevDemoStep} className="px-3 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200">이전</button>
+                    <button onClick={nextDemoStep} className="px-3 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">다음</button>
+                    <button onClick={stopDemo} className="px-3 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600">종료</button>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </div>
+        )}
 
         {/* Floating Toolbar */}
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-4 bg-white/80 backdrop-blur-xl px-6 py-3 rounded-3xl shadow-2xl border border-neutral-200/50">
