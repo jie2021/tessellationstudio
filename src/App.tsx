@@ -60,6 +60,24 @@ const getBaseVertices = (type: ShapeType): Point[] => {
 // --- Components ---
 
 export default function App() {
+  // Inline computed SVG styles into style attributes to preserve appearance when serializing
+  const inlineStyles = (el: Element) => {
+    const nodes = el.querySelectorAll('*');
+    const props = ['fill','stroke','opacity','stroke-width','fill-opacity','stroke-opacity','stroke-linejoin','stroke-linecap','stroke-miterlimit','font-size','font-family','font-weight','mix-blend-mode'];
+    nodes.forEach(node => {
+      try {
+        const cs = window.getComputedStyle(node as Element);
+        const stylePairs: string[] = [];
+        for (const p of props) {
+          const v = cs.getPropertyValue(p);
+          if (v) stylePairs.push(`${p}:${v}`);
+        }
+        if (stylePairs.length) (node as HTMLElement).setAttribute('style', stylePairs.join(';'));
+      } catch (e) {
+        // ignore nodes that can't compute styles
+      }
+    });
+  };
   const [shapeType, setShapeType] = useState<ShapeType>('square');
   const [edgePaths, setEdgePaths] = useState<Record<number, Point[]>>({});
   const [activePoint, setActivePoint] = useState<{ edgeIdx: number; pointIdx: number } | null>(null);
@@ -686,12 +704,18 @@ export default function App() {
               clone.setAttribute('height', String(h));
               clone.style.opacity = '1';
 
-              // Inline background colour
+              // Inline background colour (use computed background of parent if available)
+              const parent = svgEl.parentElement;
+              let bgColor = '#fafafa';
+              try { if (parent) { const cb = getComputedStyle(parent).backgroundColor; if (cb && cb !== 'rgba(0, 0, 0, 0)') bgColor = cb; } } catch (e) {}
               const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
               bg.setAttribute('width',  String(w));
               bg.setAttribute('height', String(h));
-              bg.setAttribute('fill', '#fafafa');
+              bg.setAttribute('fill', bgColor);
               clone.insertBefore(bg, clone.firstChild);
+
+              // Inline computed styles so exported SVG matches on-screen rendering
+              inlineStyles(clone);
 
               const svgStr = new XMLSerializer().serializeToString(clone);
               const blob   = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
@@ -724,7 +748,7 @@ export default function App() {
       <main className="flex-1 relative flex flex-col bg-white">
         {/* Tessellation Preview (Background) */}
         <div className="absolute inset-0 z-0 overflow-hidden bg-neutral-50">
-          <svg id="tessellation-svg" className="w-full h-full opacity-30 transition-opacity duration-500">
+          <svg id="tessellation-svg" className="w-full h-full transition-opacity duration-500">
             <g transform={`translate(${window.innerWidth/2 - CENTER}, ${window.innerHeight/2 - CENTER}) scale(${zoom})`}>
               {renderTessellation()}
             </g>
