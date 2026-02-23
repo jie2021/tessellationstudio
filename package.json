@@ -31,7 +31,7 @@
     "typescript": "~5.8.2"
   },
   "engines": {
-    "node": "24.13.1"
+    "node": "20.x"
   },
   "overrides": {
     "minimatch": "^10.2.1",
