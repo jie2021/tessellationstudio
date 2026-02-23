@@ -62,6 +62,7 @@ const getBaseVertices = (type: ShapeType): Point[] => {
 export default function App() {
   // Inline computed SVG styles into style attributes to preserve appearance when serializing
   const inlineStyles = (el: Element) => {
+    if (typeof window === 'undefined') return el;
     const nodes = el.querySelectorAll('*');
     const props = ['fill','stroke','opacity','stroke-width','fill-opacity','stroke-opacity','stroke-linejoin','stroke-linecap','stroke-miterlimit','font-size','font-family','font-weight','mix-blend-mode'];
     nodes.forEach(node => {
@@ -94,6 +95,16 @@ export default function App() {
   const [demoStep, setDemoStep] = useState(0);
   const demoIntervalRef = React.useRef<number | null>(null);
   const [demoCenters, setDemoCenters] = useState<{cx:number, cy:number}[]>([]);
+
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const compute = () => setOffset({ x: window.innerWidth / 2 - CENTER, y: window.innerHeight / 2 - CENTER });
+    compute();
+    window.addEventListener('resize', compute);
+    return () => window.removeEventListener('resize', compute);
+  }, []);
 
   const baseVertices = useMemo(() => getBaseVertices(shapeType), [shapeType]);
 
@@ -749,7 +760,7 @@ export default function App() {
         {/* Tessellation Preview (Background) */}
         <div className="absolute inset-0 z-0 overflow-hidden bg-neutral-50">
           <svg id="tessellation-svg" className="w-full h-full transition-opacity duration-500">
-            <g transform={`translate(${window.innerWidth/2 - CENTER}, ${window.innerHeight/2 - CENTER}) scale(${zoom})`}>
+            <g transform={`translate(${offset.x}, ${offset.y}) scale(${zoom})`}>
               {renderTessellation()}
             </g>
           </svg>
@@ -922,7 +933,7 @@ export default function App() {
         </div>
       </main>
 
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap');
         
         .font-display {
@@ -955,7 +966,7 @@ export default function App() {
           border: 2px solid white;
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-      `}</style>
+      ` }} />
     </div>
   );
 }
