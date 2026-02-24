@@ -494,14 +494,15 @@ export default function App() {
     const n = Math.min(4, Math.max(1, squareDemoStep));
     for (let k = 0; k < n; k++) {
       const angle = k * 90;
+      const wedgeFill = (k % 2 === 0) ? colorA : colorB;
       arr.push(
         <path
           key={`sqdemo-center-${k}`}
           d={tilePathData}
           transform={`rotate(${angle}, ${pivot.x}, ${pivot.y})`}
-          fill={colorA}
-          fillOpacity={0.15}
-          stroke={colorA}
+          fill={wedgeFill}
+          fillOpacity={1}
+          stroke={wedgeFill}
           strokeWidth={0.5}
         />
       );
@@ -529,16 +530,18 @@ export default function App() {
         const { cx, cy } = centers[i];
         const tx = cx - 0; // we translate the whole assembly to (cx,cy) relative to pivot
         const ty = cy - 0;
+        // For translated assemblies, preserve the 4-wedge color pattern
         for (let k = 0; k < 4; k++) {
           const angle = k * 90;
+          const wedgeFill = (k % 2 === 0) ? colorA : colorB;
           arr.push(
             <path
               key={`sqdemo-${i}-${k}`}
               d={tilePathData}
               transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
-              fill={colorA}
-              fillOpacity={0.15}
-              stroke={colorA}
+              fill={wedgeFill}
+              fillOpacity={1}
+              stroke={wedgeFill}
               strokeWidth={0.5}
             />
           );
@@ -1110,7 +1113,7 @@ export default function App() {
                                 animate={{ r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8, fill }}
                                 className={`stroke-white stroke-[3px] shadow-lg ${
                                   !interactive ? 'pointer-events-none cursor-default' :
-                                  activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none opacity-50 cursor-default' :
+                                  activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none cursor-default' :
                                   'cursor-move'
                                 }`}
                                 onMouseDown={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
