@@ -346,6 +346,43 @@ export default function App() {
         }
       }
 
+      // Square-specific behavior:
+      if (shapeType === 'square') {
+        // Define driven (bottom) edge and paired edge mapping depending on triSymmetry
+        // Edge indices (with startAngle -PI/4): 0=right,1=top,2=left,3=bottom
+        const driven = 3; // bottom edge
+        const paired = triSymmetry === 'cw' ? (driven + 1) % 4 : (driven + 3) % 4; // cw -> right(0), ccw -> left(2)
+
+        if (activePoint.edgeIdx === driven) {
+          // compute midpoint of driven and paired edges
+          const v0 = baseVertices[driven];
+          const v1 = baseVertices[(driven + 1) % 4];
+          const mvx = (v0.x + v1.x) / 2;
+          const mvy = (v0.y + v1.y) / 2;
+
+          const cp = newPaths[driven][0];
+          const vx = cp.x - mvx;
+          const vy = cp.y - mvy;
+
+          // rotate vector by ±90 degrees
+          const sign = triSymmetry === 'cw' ? 1 : -1; // cw => +90deg, ccw => -90deg
+          const rad = (Math.PI / 2) * sign;
+          const rx = Math.cos(rad) * vx - Math.sin(rad) * vy;
+          const ry = Math.sin(rad) * vx + Math.cos(rad) * vy;
+
+          // apply rotated offset to paired edge midpoint
+          const pv0 = baseVertices[paired];
+          const pv1 = baseVertices[(paired + 1) % 4];
+          const pmx = (pv0.x + pv1.x) / 2;
+          const pmy = (pv0.y + pv1.y) / 2;
+
+          newPaths[paired] = [{ x: pmx + rx, y: pmy + ry }];
+        }
+
+        // Ensure top edge (index 1) remains a midpoint-based control (do not split)
+        // No extra handling needed here because initialization uses midpoints for squares
+      }
+
       return newPaths;
     });
   }, [activePoint, currentEdgePaths]);
@@ -837,7 +874,7 @@ export default function App() {
           <svg id="tessellation-svg" className="w-full h-full transition-opacity duration-500">
               <g transform={`translate(${offset.x}, ${offset.y}) scale(${zoom})`}>
                 {shapeType === 'square' && (
-                  <Rectangle tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} />
+                  <Rectangle tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={triSymmetry} />
                 )}
                 {shapeType === 'hexagon' && (
                   <HexagonShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} />
