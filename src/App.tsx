@@ -414,6 +414,31 @@ export default function App() {
           newPaths[rightIdx] = [{ x: rmx + trx, y: rmy + try_ }];
         }
 
+        // When the bottom edge (driven) is edited, update the left edge midpoint
+        // so the tiling remains continuous. Bottom edge index = 3, left = 2.
+        if (activePoint.edgeIdx === driven) {
+          const leftIdx = 2;
+          const bv0 = baseVertices[driven];
+          const bv1 = baseVertices[(driven + 1) % 4];
+          const bmx = (bv0.x + bv1.x) / 2;
+          const bmy = (bv0.y + bv1.y) / 2;
+          const drivenPts = newPaths[driven];
+          if (drivenPts && drivenPts.length > 0) {
+            let cp = drivenPts[0];
+            if (drivenPts.length >= 2) cp = { x: (drivenPts[0].x + drivenPts[1].x) / 2, y: (drivenPts[0].y + drivenPts[1].y) / 2 };
+            const dvx = cp.x - bmx;
+            const dvy = cp.y - bmy;
+            const ang = Math.PI / 2;
+            const lx = Math.cos(ang) * dvx - Math.sin(ang) * dvy;
+            const ly = Math.sin(ang) * dvx + Math.cos(ang) * dvy;
+            const lv0 = baseVertices[leftIdx];
+            const lv1 = baseVertices[(leftIdx + 1) % 4];
+            const lmx = (lv0.x + lv1.x) / 2;
+            const lmy = (lv0.y + lv1.y) / 2;
+            newPaths[leftIdx] = [{ x: lmx + lx, y: lmy + ly }];
+          }
+        }
+
         // Ensure top edge (index 1) remains a midpoint-based control (do not split)
         // No extra handling needed here because initialization uses midpoints for squares
       }
@@ -502,7 +527,7 @@ export default function App() {
           transform={`rotate(${angle}, ${pivot.x}, ${pivot.y})`}
           fill={wedgeFill}
           fillOpacity={1}
-          stroke={wedgeFill}
+          stroke="#000"
           strokeWidth={0.5}
         />
       );
@@ -541,7 +566,7 @@ export default function App() {
               transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
               fill={wedgeFill}
               fillOpacity={1}
-              stroke={wedgeFill}
+              stroke="#000"
               strokeWidth={0.5}
             />
           );
@@ -1096,12 +1121,14 @@ export default function App() {
 
                             // Visuals: driven = solid blue, spare = two blues (one active,
                             // one mirrored), paired = orange (auto-updated)
-                            const fill = isPaired ? '#f59e0b' : isDriven ? '#2563eb' : (isSpare ? (pointIdx === 0 ? '#2563eb' : '#60a5fa') : '#6366f1');
+                            let fill = isPaired ? '#f59e0b' : isDriven ? '#2563eb' : (isSpare ? (pointIdx === 0 ? '#2563eb' : '#60a5fa') : '#6366f1');
 
                             // Interactivity: paired edge points are non-interactive. For
                             // spare edge, allow dragging the first point (index 0) and
                             // mirror the second; driven edge (bottom) remains draggable.
                             const interactive = !isPaired && !(isSpare && pointIdx === 1);
+                            // Make interactive (draggable) points blue; auto-updated remain orange
+                            if (interactive) fill = '#2563eb';
 
                             return (
                               <motion.circle
@@ -1130,13 +1157,18 @@ export default function App() {
                     if (shapeType === 'square') {
                       const driven = 3; // bottom edge
                       const paired = triSymmetry === 'cw' ? (driven + 1) % 4 : (driven + 3) % 4; // cw -> right(0), ccw -> left(2)
+                      const leftIdx = 2;
                       return (
                         <g key={edgeIdx}>
                           {(points as Point[]).map((p, pointIdx) => {
                             const isDriven = ei === driven;
                             const isPaired = ei === paired;
-                            const fill = isPaired ? '#f59e0b' : isDriven ? '#2563eb' : '#6366f1';
-                            const interactive = !isPaired && !(activePoint && activePoint.edgeIdx !== ei);
+                            const isLeft = ei === leftIdx;
+                            // left edge is always orange and non-interactive
+                            let fill = isLeft ? '#f59e0b' : isPaired ? '#f59e0b' : isDriven ? '#2563eb' : '#6366f1';
+                            let interactive = !isPaired && !(activePoint && activePoint.edgeIdx !== ei);
+                            if (isLeft) interactive = false;
+                            if (interactive) fill = '#2563eb';
 
                             return (
                               <motion.circle
