@@ -353,30 +353,29 @@ export default function App() {
         const driven = 3; // bottom edge
         const paired = triSymmetry === 'cw' ? (driven + 1) % 4 : (driven + 3) % 4; // cw -> right(0), ccw -> left(2)
 
-        if (activePoint.edgeIdx === driven) {
-          // compute midpoint of driven and paired edges
-          const v0 = baseVertices[driven];
-          const v1 = baseVertices[(driven + 1) % 4];
-          const mvx = (v0.x + v1.x) / 2;
-          const mvy = (v0.y + v1.y) / 2;
+        // (Bottom-driven -> paired mapping removed per user request)
+        // Restore original behavior: when the top edge is edited, update the right
+        // paired edge so the tiling remains continuous.
+        if (activePoint.edgeIdx === 1) {
+          const topIdx = 1;
+          const rightIdx = triSymmetry === 'cw' ? 0 : 2; // cw -> right(0), ccw -> left(2)
+          const tv0 = baseVertices[topIdx];
+          const tv1 = baseVertices[(topIdx + 1) % 4];
+          const tmx = (tv0.x + tv1.x) / 2;
+          const tmy = (tv0.y + tv1.y) / 2;
+          const tcp = newPaths[topIdx][0];
+          const tvx = tcp.x - tmx;
+          const tvy = tcp.y - tmy;
+          // rotate vector by +90deg to map top->right (consistent orientation)
+          const trad = Math.PI / 2;
+          const trx = Math.cos(trad) * tvx - Math.sin(trad) * tvy;
+          const try_ = Math.sin(trad) * tvx + Math.cos(trad) * tvy;
 
-          const cp = newPaths[driven][0];
-          const vx = cp.x - mvx;
-          const vy = cp.y - mvy;
-
-          // rotate vector by ±90 degrees
-          const sign = triSymmetry === 'cw' ? 1 : -1; // cw => +90deg, ccw => -90deg
-          const rad = (Math.PI / 2) * sign;
-          const rx = Math.cos(rad) * vx - Math.sin(rad) * vy;
-          const ry = Math.sin(rad) * vx + Math.cos(rad) * vy;
-
-          // apply rotated offset to paired edge midpoint
-          const pv0 = baseVertices[paired];
-          const pv1 = baseVertices[(paired + 1) % 4];
-          const pmx = (pv0.x + pv1.x) / 2;
-          const pmy = (pv0.y + pv1.y) / 2;
-
-          newPaths[paired] = [{ x: pmx + rx, y: pmy + ry }];
+          const rp0 = baseVertices[rightIdx];
+          const rp1 = baseVertices[(rightIdx + 1) % 4];
+          const rmx = (rp0.x + rp1.x) / 2;
+          const rmy = (rp0.y + rp1.y) / 2;
+          newPaths[rightIdx] = [{ x: rmx + trx, y: rmy + try_ }];
         }
 
         // Ensure top edge (index 1) remains a midpoint-based control (do not split)
@@ -981,7 +980,42 @@ export default function App() {
                       );
                     }
 
-                    // Non-triangle shapes: render all control points as before
+                    // Non-triangle shapes: special-case square so bottom edge is draggable
+                    // and the paired edge is shown orange and non-interactive
+                    if (shapeType === 'square') {
+                      const driven = 3; // bottom edge
+                      const paired = triSymmetry === 'cw' ? (driven + 1) % 4 : (driven + 3) % 4; // cw -> right(0), ccw -> left(2)
+                      return (
+                        <g key={edgeIdx}>
+                          {(points as Point[]).map((p, pointIdx) => {
+                            const isDriven = ei === driven;
+                            const isPaired = ei === paired;
+                            const fill = isPaired ? '#f59e0b' : isDriven ? '#2563eb' : '#6366f1';
+                            const interactive = !isPaired && !(activePoint && activePoint.edgeIdx !== ei);
+
+                            return (
+                              <motion.circle
+                                key={pointIdx}
+                                cx={p.x}
+                                cy={p.y}
+                                r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
+                                initial={false}
+                                animate={{ r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8, fill }}
+                                className={`stroke-white stroke-[3px] shadow-lg ${
+                                  !interactive ? 'pointer-events-none cursor-default' :
+                                  activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none opacity-50 cursor-default' :
+                                  'cursor-move'
+                                }`}
+                                onMouseDown={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
+                                onTouchStart={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
+                              />
+                            );
+                          })}
+                        </g>
+                      );
+                    }
+
+                    // Fallback for other non-triangle shapes
                     return (
                       <g key={edgeIdx}>
                         {(points as Point[]).map((p, pointIdx) => (
