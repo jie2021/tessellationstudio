@@ -99,6 +99,10 @@ export default function App() {
   const [demoStep, setDemoStep] = useState(0);
   const demoIntervalRef = React.useRef<number | null>(null);
   const [demoCenters, setDemoCenters] = useState<{cx:number, cy:number}[]>([]);
+  // Square demo state: show construction steps (base, 90°,180°,270°)
+  const [squareDemoMode, setSquareDemoMode] = useState(false);
+  const [squareDemoStep, setSquareDemoStep] = useState(0);
+  const squareDemoIntervalRef = React.useRef<number | null>(null);
 
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
@@ -209,6 +213,28 @@ export default function App() {
     setDemoStep(0);
   };
 
+  // --- Square demo controls ---
+  const startSquareDemo = () => {
+    setShapeType('square');
+    setSquareDemoMode(true);
+    setSquareDemoStep(1);
+    // Ensure editor is hidden while demo runs
+    try { setShowEditor(false); } catch(e) {}
+  };
+
+  const stopSquareDemo = () => {
+    setSquareDemoMode(false);
+    setSquareDemoStep(0);
+    if (squareDemoIntervalRef.current) {
+      window.clearInterval(squareDemoIntervalRef.current);
+      squareDemoIntervalRef.current = null;
+    }
+  };
+
+  // Allow many translation reveal steps; cap is generous (4 rotations + 80 translations)
+  const nextSquareStep = () => setSquareDemoStep(s => Math.min(s + 1, 4 + 80));
+  const prevSquareStep = () => setSquareDemoStep(s => Math.max(s - 1, 1));
+
   // cleanup interval on unmount
   useEffect(() => {
     return () => {
@@ -253,6 +279,16 @@ export default function App() {
     const hexes = Math.max(0, step - 6);
     if (hexes === 0) return '중앙 육각형 완성 — 다음 버튼을 눌러 주변 육각형을 하나씩 추가하세요.';
     return `주변 육각형 #${hexes}는 밀어서 복사합니다.`;
+  };
+
+  const getSquareDemoText = (step: number) => {
+    if (step <= 0) return '데모 준비 중... (다음 버튼을 눌러 시작하세요)';
+    if (step === 1) return '기본 도형을 표시합니다.';
+    if (step === 2) return '오른쪽 하단 꼭지점을 기준으로 90도 회전합니다.';
+    if (step === 3) return '같은 기준점에서 180도 회전합니다.';
+    if (step === 4) return '같은 기준점에서 270도 회전합니다.';
+    const add = step - 4;
+    return `주변을 평행이동으로 채웁니다 — 추가 패치 #${add}`;
   };
 
   const handleMouseDown = (edgeIdx: number, pointIdx: number) => {
@@ -417,6 +453,110 @@ export default function App() {
     d += ' Z';
     return d;
   }, [baseVertices, currentEdgePaths, useCurve]);
+
+  // Precompute square demo tiles (rotated copies around bottom-right pivot)
+  const squareDemoTiles = useMemo(() => {
+    if (!squareDemoMode || shapeType !== 'square') return null;
+    if (!baseVertices || baseVertices.length === 0) return null;
+    // pivot = bottom-right vertex (max x+y)
+    let pivot = baseVertices[0];
+    for (const v of baseVertices) {
+      if (v.x + v.y > pivot.x + pivot.y) pivot = v;
+    }
+
+    // Compute bounding box of the assembled 4-rotation patch to determine translation grid
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const rotatePoint = (p: { x: number; y: number }, angleDeg: number, cx: number, cy: number) => {
+      const a = (angleDeg * Math.PI) / 180;
+      const dx = p.x - cx;
+      const dy = p.y - cy;
+      const rx = Math.cos(a) * dx - Math.sin(a) * dy;
+      const ry = Math.sin(a) * dx + Math.cos(a) * dy;
+      return { x: cx + rx, y: cy + ry };
+    };
+    for (let k = 0; k < 4; k++) {
+      const angle = k * 90;
+      for (const v of baseVertices) {
+        const rp = rotatePoint(v, angle, pivot.x, pivot.y);
+        if (rp.x < minX) minX = rp.x;
+        if (rp.y < minY) minY = rp.y;
+        if (rp.x > maxX) maxX = rp.x;
+        if (rp.y > maxY) maxY = rp.y;
+      }
+    }
+
+    const width = (isFinite(maxX) && isFinite(minX)) ? Math.max(1, maxX - minX) : RADIUS * Math.SQRT2;
+    const height = (isFinite(maxY) && isFinite(minY)) ? Math.max(1, maxY - minY) : RADIUS * Math.SQRT2;
+
+    const arr: React.ReactNode[] = [];
+
+    // Show the central assembly: 1..4 rotated wedges depending on step
+    const n = Math.min(4, Math.max(1, squareDemoStep));
+    for (let k = 0; k < n; k++) {
+      const angle = k * 90;
+      arr.push(
+        <path
+          key={`sqdemo-center-${k}`}
+          d={tilePathData}
+          transform={`rotate(${angle}, ${pivot.x}, ${pivot.y})`}
+          fill={colorA}
+          fillOpacity={0.15}
+          stroke={colorA}
+          strokeWidth={0.5}
+        />
+      );
+    }
+
+    // If step > 4, reveal translated assemblies one by one
+    if (squareDemoStep > 4) {
+      const range = 4; // grid radius for revealed assemblies
+      const centers: {cx:number, cy:number}[] = [];
+      for (let r = -range; r <= range; r++) {
+        for (let c = -range; c <= range; c++) {
+          const cx = c * width;
+          const cy = r * height;
+          // skip central (0,0) — already shown
+          if (Math.abs(cx) < 1e-6 && Math.abs(cy) < 1e-6) continue;
+          centers.push({ cx, cy });
+        }
+      }
+      centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
+
+      const requested = squareDemoStep - 4;
+      // If requested reveal index reaches 9 or more, show all at once
+      const reveal = (requested >= 9) ? centers.length : Math.min(centers.length, requested);
+      for (let i = 0; i < reveal; i++) {
+        const { cx, cy } = centers[i];
+        const tx = cx - 0; // we translate the whole assembly to (cx,cy) relative to pivot
+        const ty = cy - 0;
+        for (let k = 0; k < 4; k++) {
+          const angle = k * 90;
+          arr.push(
+            <path
+              key={`sqdemo-${i}-${k}`}
+              d={tilePathData}
+              transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
+              fill={colorA}
+              fillOpacity={0.15}
+              stroke={colorA}
+              strokeWidth={0.5}
+            />
+          );
+        }
+      }
+    }
+
+    // pivot marker for demo clarity
+    arr.push(
+      <g key="sqdemo-pivot" pointerEvents="none">
+        <circle cx={pivot.x} cy={pivot.y} r={8} fill="#ef4444" stroke="#fff" strokeWidth={2} />
+        <circle cx={pivot.x} cy={pivot.y} r={4} fill="#fff" />
+        <text x={pivot.x + 12} y={pivot.y + 4} fontSize={12} fill="#111" fontWeight={600}>기준점</text>
+      </g>
+    );
+
+    return arr;
+  }, [squareDemoMode, squareDemoStep, tilePathData, baseVertices, colorA]);
 
   // Logic for tiling.
   // The tile path is drawn centered at (CENTER, CENTER) in 0-CANVAS_SIZE coordinate space.
@@ -873,7 +1013,9 @@ export default function App() {
           <svg id="tessellation-svg" className="w-full h-full transition-opacity duration-500">
               <g transform={`translate(${offset.x}, ${offset.y}) scale(${zoom})`}>
                 {shapeType === 'square' && (
-                  <Rectangle tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={triSymmetry} />
+                  squareDemoMode ? squareDemoTiles : (
+                    <Rectangle tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={triSymmetry} />
+                  )
                 )}
                 {shapeType === 'hexagon' && (
                   <HexagonShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} />
@@ -885,8 +1027,8 @@ export default function App() {
           </svg>
         </div>
 
-        {/* Editor Overlay (hidden during demo) */}
-        {!demoMode && (
+        {/* Editor Overlay (hidden during demo and during square demo) */}
+        {!demoMode && !squareDemoMode && (
           <div className="flex-1 flex items-center justify-center z-10 p-8 pointer-events-none">
             <div className="relative pointer-events-auto">
             <AnimatePresence mode="wait">
@@ -1087,6 +1229,29 @@ export default function App() {
           </div>
         )}
 
+        {/* Square demo overlay */}
+        {squareDemoMode && (
+          <div className="absolute inset-0 pointer-events-none z-40">
+            <AnimatePresence>
+              <motion.div
+                key={`sqdemo-text-${squareDemoStep}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="absolute bottom-36 left-1/2 -translate-x-1/2 bg-white/95 px-5 py-3 rounded-2xl shadow-lg border border-neutral-100 text-sm font-medium text-neutral-700 flex items-center gap-3 pointer-events-auto"
+              >
+                <div className="max-w-[48ch] text-center">{getSquareDemoText(squareDemoStep)}</div>
+                <div className="ml-2 flex items-center gap-2">
+                  <button onClick={prevSquareStep} className="px-3 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200">이전</button>
+                  <button onClick={nextSquareStep} className="px-3 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">다음</button>
+                  <button onClick={stopSquareDemo} className="px-3 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600">종료</button>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        )}
+
         {/* Floating Toolbar */}
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-4 bg-white/80 backdrop-blur-xl px-6 py-3 rounded-3xl shadow-2xl border border-neutral-200/50">
           <div className="flex items-center gap-2">
@@ -1113,9 +1278,9 @@ export default function App() {
           </div>
           <div className="w-px h-8 bg-neutral-200" />
           <div className="w-px h-8 bg-neutral-200" />
-          {shapeType === 'triangle' && !demoMode && (
+          {!demoMode && (
             <button
-              onClick={() => startDemo()}
+              onClick={() => { if (shapeType === 'triangle') startDemo(); else if (shapeType === 'square') startSquareDemo(); }}
               className="px-3 py-2 rounded-full font-bold text-sm transition bg-indigo-600 text-white hover:bg-indigo-700"
               title="설명하기"
             >
