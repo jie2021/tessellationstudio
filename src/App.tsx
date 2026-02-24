@@ -13,6 +13,10 @@ import {
   Grid3X3
 } from 'lucide-react';
 
+import Rectangle from './Rectangle';
+import HexagonShape from './Hexagon';
+import TriangleShape from './Triangle';
+
 // --- Types ---
 
 type ShapeType = 'triangle' | 'square' | 'hexagon';
@@ -831,9 +835,17 @@ export default function App() {
         {/* Tessellation Preview (Background) */}
         <div className="absolute inset-0 z-0 overflow-hidden bg-neutral-50">
           <svg id="tessellation-svg" className="w-full h-full transition-opacity duration-500">
-            <g transform={`translate(${offset.x}, ${offset.y}) scale(${zoom})`}>
-              {renderTessellation()}
-            </g>
+              <g transform={`translate(${offset.x}, ${offset.y}) scale(${zoom})`}>
+                {shapeType === 'square' && (
+                  <Rectangle tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} />
+                )}
+                {shapeType === 'hexagon' && (
+                  <HexagonShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} />
+                )}
+                {shapeType === 'triangle' && (
+                  <TriangleShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={triSymmetry} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} />
+                )}
+              </g>
           </svg>
         </div>
 
