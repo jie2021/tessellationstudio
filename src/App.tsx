@@ -215,6 +215,19 @@ export default function App() {
     };
   }, []);
 
+  // If there are 7 or more surrounding hexes, when demo reaches the
+  // surrounding-hexes phase (demoStep > 6) skip incremental reveal and
+  // immediately show all surrounding hexes by advancing demoStep to full.
+  useEffect(() => {
+    if (!demoMode) return;
+    // only apply when we've moved past the central 6-triangle explanation
+    if (demoStep <= 12) return;
+    if (demoCenters.length >= 13) {
+      const full = 6 + demoCenters.length;
+      if (demoStep !== full) setDemoStep(full);
+    }
+  }, [demoMode, demoStep, demoCenters.length]);
+
   const nextDemoStep = () => {
     const max = 6 + demoCenters.length;
     setDemoStep(prev => Math.min(prev + 1, max));
@@ -746,16 +759,7 @@ export default function App() {
                 <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">3</div>
                 <p className="text-xs text-neutral-600 leading-relaxed">완성된 패턴을 저장하거나 초기화할 수 있습니다.</p>
               </div>
-              {shapeType === 'triangle' && (
-                <div className="mt-3">
-                  <button
-                    onClick={() => { demoMode ? stopDemo() : startDemo(); }}
-                    className={`w-full py-3 px-4 rounded-2xl font-bold text-sm transition-all ${demoMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-                  >
-                    {demoMode ? '중지' : '설명하기'}
-                  </button>
-                </div>
-              )}
+              {/* demo button removed from sidebar per request */}
             </div>
           </section>
         </div>
@@ -977,28 +981,26 @@ export default function App() {
           </div>
         )}
 
-        {/* Demo explanatory overlay */}
+        {/* Demo explanatory overlay (fixed bottom-center; no vertical animation) */}
         {demoMode && (
-          <div className="absolute inset-0 flex items-start justify-center pointer-events-none z-40">
-            <div className="mt-8 pointer-events-auto">
-              <AnimatePresence>
-                <motion.div
-                  key={`demo-text-${demoStep}`}
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.25 }}
-                  className="bg-white/95 px-5 py-3 rounded-2xl shadow-lg border border-neutral-100 text-sm font-medium text-neutral-700 flex items-center gap-3"
-                >
-                  <div>{getDemoText(demoStep)}</div>
-                  <div className="ml-2 flex items-center gap-2">
-                    <button onClick={prevDemoStep} className="px-3 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200">이전</button>
-                    <button onClick={nextDemoStep} className="px-3 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">다음</button>
-                    <button onClick={stopDemo} className="px-3 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600">종료</button>
-                  </div>
-                </motion.div>
-              </AnimatePresence>
-            </div>
+          <div className="absolute inset-0 pointer-events-none z-40">
+            <AnimatePresence>
+              <motion.div
+                key={`demo-text-${demoStep}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="absolute bottom-36 left-1/2 -translate-x-1/2 bg-white/95 px-5 py-3 rounded-2xl shadow-lg border border-neutral-100 text-sm font-medium text-neutral-700 flex items-center gap-3 pointer-events-auto"
+              >
+                <div className="max-w-[48ch] text-center">{getDemoText(demoStep)}</div>
+                <div className="ml-2 flex items-center gap-2">
+                  <button onClick={prevDemoStep} className="px-3 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200">이전</button>
+                  <button onClick={nextDemoStep} className="px-3 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">다음</button>
+                  <button onClick={stopDemo} className="px-3 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600">종료</button>
+                </div>
+              </motion.div>
+            </AnimatePresence>
           </div>
         )}
 
@@ -1028,23 +1030,22 @@ export default function App() {
           </div>
           <div className="w-px h-8 bg-neutral-200" />
           <div className="w-px h-8 bg-neutral-200" />
-          {/* Place demo button between zoom and center label for triangle only */}
-          {shapeType === 'triangle' && (
-            <div>
-              <button
-                onClick={() => { demoMode ? stopDemo() : startDemo(); }}
-                className={`px-3 py-1 rounded-xl font-bold text-sm transition ${demoMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-                title={demoMode ? '데모 중지' : '설명하기'}
-              >
-                {demoMode ? '중지' : '설명하기'}
-              </button>
-            </div>
+          {shapeType === 'triangle' && !demoMode && (
+            <button
+              onClick={() => startDemo()}
+              className="px-3 py-2 rounded-full font-bold text-sm transition bg-indigo-600 text-white hover:bg-indigo-700"
+              title="설명하기"
+            >
+              설명하기
+            </button>
           )}
 
           <p className="text-xs font-bold text-neutral-700 whitespace-nowrap">
             {shapeType === 'triangle' ? '정삼각형' : shapeType === 'square' ? '정사각형' : '정육각형'} 패턴
           </p>
         </div>
+
+        {/* demo button now in toolbar; centered demo button removed */}
       </main>
 
       <style dangerouslySetInnerHTML={{ __html: `
