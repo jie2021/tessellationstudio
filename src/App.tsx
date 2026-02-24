@@ -582,9 +582,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-neutral-50 overflow-hidden font-sans">
+    <div className="min-h-screen flex flex-col lg:flex-row bg-neutral-50 lg:overflow-hidden font-sans">
       {/* Sidebar Controls */}
-      <aside className="w-full lg:w-96 bg-white border-b lg:border-b-0 lg:border-r border-neutral-200 p-8 flex flex-col gap-8 z-20 shadow-xl overflow-y-auto">
+      <aside className="w-full lg:w-96 bg-white border-b lg:border-b-0 lg:border-r border-neutral-200 p-8 flex flex-col gap-8 z-20 shadow-xl lg:h-screen lg:overflow-y-auto">
         <header>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold uppercase tracking-widest mb-4">
             <Grid3X3 size={12} /> Interactive Design Tool
@@ -823,7 +823,7 @@ export default function App() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 relative flex flex-col bg-white">
+      <main className="flex-1 relative flex flex-col bg-white lg:h-screen lg:overflow-hidden">
         {/* Tessellation Preview (Background) */}
         <div className="absolute inset-0 z-0 overflow-hidden bg-neutral-50">
           <svg id="tessellation-svg" className="w-full h-full transition-opacity duration-500">
@@ -1027,6 +1027,20 @@ export default function App() {
             />
           </div>
           <div className="w-px h-8 bg-neutral-200" />
+          <div className="w-px h-8 bg-neutral-200" />
+          {/* Place demo button between zoom and center label for triangle only */}
+          {shapeType === 'triangle' && (
+            <div>
+              <button
+                onClick={() => { demoMode ? stopDemo() : startDemo(); }}
+                className={`px-3 py-1 rounded-xl font-bold text-sm transition ${demoMode ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                title={demoMode ? '데모 중지' : '설명하기'}
+              >
+                {demoMode ? '중지' : '설명하기'}
+              </button>
+            </div>
+          )}
+
           <p className="text-xs font-bold text-neutral-700 whitespace-nowrap">
             {shapeType === 'triangle' ? '정삼각형' : shapeType === 'square' ? '정사각형' : '정육각형'} 패턴
           </p>
