@@ -113,14 +113,58 @@ export default function App() {
     const paths: Record<number, Point[]> = { ...edgePaths };
     const numEdges = shapeType === 'square' ? 4 : shapeType === 'hexagon' ? 6 : 3;
     
+    // For triangle mode, we want the driven (bottom) edge to remain a single
+    // midpoint control, while the "spare" side (left or right depending on
+    // triSymmetry) is split into two symmetric control points around its
+    // midpoint. The paired edge (the one that was previously driven by the
+    // bottom edge) remains a single control and will be updated when the
+    // bottom edge is edited.
     for (let i = 0; i < numEdges; i++) {
       if (!paths[i]) {
         const v1 = baseVertices[i];
         const v2 = baseVertices[(i + 1) % numEdges];
-        // Default: one midpoint
-        paths[i] = [
-          { x: (v1.x + v2.x) / 2, y: (v1.y + v2.y) / 2 }
-        ];
+
+        if (shapeType === 'triangle') {
+          const driven = 1; // bottom edge
+          const paired = triSymmetry === 'cw' ? (driven + 2) % 3 : (driven + 1) % 3;
+          const spare = [0,1,2].find(x => x !== driven && x !== paired)!;
+
+          const mx = (v1.x + v2.x) / 2;
+          const my = (v1.y + v2.y) / 2;
+
+          // helper: build a symmetric pair around an edge midpoint
+          const makeSymmetric = (a: Point, b: Point) => {
+            const mmx = (a.x + b.x) / 2;
+            const mmy = (a.y + b.y) / 2;
+            const ex = b.x - a.x;
+            const ey = b.y - a.y;
+            const len = Math.sqrt(ex * ex + ey * ey) || 1;
+            const nx = -ey / len;
+            const ny = ex / len;
+            const offset = Math.max(30, RADIUS * 0.12);
+            return [
+              { x: mmx + nx * offset, y: mmy + ny * offset },
+              { x: mmx - nx * offset, y: mmy - ny * offset },
+            ];
+          };
+
+          if (i === driven) {
+            // bottom edge stays a single midpoint control
+            paths[i] = [{ x: mx, y: my }];
+          } else if (i === spare) {
+            // spare edge: two symmetric controls
+            paths[i] = makeSymmetric(v1, v2);
+          } else {
+            // paired edge: single midpoint (will be driven by bottom edits)
+            paths[i] = [{ x: mx, y: my }];
+          }
+
+        } else {
+          // Default: one midpoint for non-triangle shapes
+          paths[i] = [
+            { x: (v1.x + v2.x) / 2, y: (v1.y + v2.y) / 2 }
+          ];
+        }
       }
     }
     return paths;
@@ -224,42 +268,65 @@ export default function App() {
       points[activePoint.pointIdx] = { x, y };
       newPaths[activePoint.edgeIdx] = points;
 
-      // For triangle: mirror the moved point onto the paired edge
+      // Triangle-specific behavior:
+      // - driven (bottom) edge index = 1. When the driven edge is edited,
+      //   update the paired edge using the original rotation-based mapping.
+      // - the spare edge (left or right depending on triSymmetry) is split
+      //   into two symmetric controls around its midpoint; moving one of them
+      //   mirrors the other across the midpoint. Spare edits must NOT change
+      //   the driven/paired mapping.
       if (shapeType === 'triangle') {
-        const drivenEdge = activePoint.edgeIdx;
-        const pairedEdge =
-          triSymmetry === 'cw' ? (drivenEdge + 2) % 3 :
-          /* ccw */              (drivenEdge + 1) % 3;
+        const driven = 1;
+        const paired = triSymmetry === 'cw' ? (driven + 2) % 3 : (driven + 1) % 3;
+        const spare = [0,1,2].find(x => x !== driven && x !== paired)!;
 
-        const v0 = baseVertices[drivenEdge];
-        const v1 = baseVertices[(drivenEdge + 1) % 3];
-        const pv0 = baseVertices[pairedEdge];
-        const pv1 = baseVertices[(pairedEdge + 1) % 3];
+        // If editing the driven edge (bottom), update the paired edge accordingly
+        if (activePoint.edgeIdx === driven) {
+          const v0 = baseVertices[driven];
+          const v1 = baseVertices[(driven + 1) % 3];
+          const pv0 = baseVertices[paired];
+          const pv1 = baseVertices[(paired + 1) % 3];
 
-        const drivenPts = newPaths[drivenEdge];
-        const pairedPts = drivenPts.map((_p, idx) => {
-          const cp = drivenPts[idx];
-          const edgeLen2 = (v1.x - v0.x) ** 2 + (v1.y - v0.y) ** 2;
-          const t = edgeLen2 > 0
-            ? ((cp.x - v0.x) * (v1.x - v0.x) + (cp.y - v0.y) * (v1.y - v0.y)) / edgeLen2
-            : 0.5;
-          const ex = v1.x - v0.x, ey = v1.y - v0.y;
-          const len = Math.sqrt(edgeLen2) || 1;
-          const nx = -ey / len, ny = ex / len;
-          const d = (cp.x - v0.x) * nx + (cp.y - v0.y) * ny;
+          const drivenPts = newPaths[driven];
+          const pairedPts = drivenPts.map((_p, idx) => {
+            const cp = drivenPts[idx];
+            const edgeLen2 = (v1.x - v0.x) ** 2 + (v1.y - v0.y) ** 2;
+            const t = edgeLen2 > 0
+              ? ((cp.x - v0.x) * (v1.x - v0.x) + (cp.y - v0.y) * (v1.y - v0.y)) / edgeLen2
+              : 0.5;
+            const ex = v1.x - v0.x, ey = v1.y - v0.y;
+            const len = Math.sqrt(edgeLen2) || 1;
+            const nx = -ey / len, ny = ex / len;
+            const d = (cp.x - v0.x) * nx + (cp.y - v0.y) * ny;
 
-          const tPaired = 1 - t;
-          const baseX = pv0.x + tPaired * (pv1.x - pv0.x);
-          const baseY = pv0.y + tPaired * (pv1.y - pv0.y);
-          const pex = pv1.x - pv0.x, pey = pv1.y - pv0.y;
-          const plen = Math.sqrt(pex ** 2 + pey ** 2) || 1;
-          const pnx = -pey / plen, pny = pex / plen;
-          return {
-            x: baseX + (-d) * pnx,
-            y: baseY + (-d) * pny,
-          };
-        });
-        newPaths[pairedEdge] = pairedPts;
+            const tPaired = 1 - t;
+            const baseX = pv0.x + tPaired * (pv1.x - pv0.x);
+            const baseY = pv0.y + tPaired * (pv1.y - pv0.y);
+            const pex = pv1.x - pv0.x, pey = pv1.y - pv0.y;
+            const plen = Math.sqrt(pex ** 2 + pey ** 2) || 1;
+            const pnx = -pey / plen, pny = pex / plen;
+            return {
+              x: baseX + (-d) * pnx,
+              y: baseY + (-d) * pny,
+            };
+          });
+          newPaths[paired] = pairedPts;
+        }
+
+        // If editing the spare edge, mirror within that edge only.
+        if (activePoint.edgeIdx === spare) {
+          const pts = newPaths[spare];
+          if (pts && pts.length >= 2) {
+            const v0 = baseVertices[spare];
+            const v1 = baseVertices[(spare + 1) % 3];
+            const mx = (v0.x + v1.x) / 2;
+            const my = (v0.y + v1.y) / 2;
+            const movedIdx = activePoint.pointIdx;
+            const otherIdx = movedIdx === 0 ? 1 : 0;
+            pts[otherIdx] = { x: 2 * mx - pts[movedIdx].x, y: 2 * my - pts[movedIdx].y };
+            newPaths[spare] = pts;
+          }
+        }
       }
 
       return newPaths;
@@ -815,42 +882,75 @@ export default function App() {
                   {Object.entries(currentEdgePaths).map(([edgeIdx, points]) => {
                     const ei = Number(edgeIdx);
 
-                    // For triangle: determine active edge (1) and its paired (slave) edge
-                    const pairedEdge = shapeType === 'triangle'
-                      ? triSymmetry === 'cw' ? (1 + 2) % 3 : (1 + 1) % 3
-                      : -1;
-                    const isActiveEdge  = shapeType !== 'triangle' || ei === 1;
-                    const isSlaveEdge   = shapeType === 'triangle' && ei === pairedEdge;
+                    if (shapeType === 'triangle') {
+                      const driven = 1;
+                      const paired = triSymmetry === 'cw' ? (driven + 2) % 3 : (driven + 1) % 3;
+                      const spare = [0,1,2].find(x => x !== driven && x !== paired)!;
 
-                    // Triangle: show only active edge (1) and its slave edge
-                    if (shapeType === 'triangle' && !isActiveEdge && !isSlaveEdge) return null;
+                      // Only render driven, paired and spare edges in triangle mode
+                      if (![driven, paired, spare].includes(ei)) return null;
 
+                      return (
+                        <g key={edgeIdx}>
+                          {(points as Point[]).map((p, pointIdx) => {
+                            const isDriven = ei === driven;
+                            const isPaired = ei === paired;
+                            const isSpare = ei === spare;
+
+                            // Visuals: driven = solid blue, spare = two blues (one active,
+                            // one mirrored), paired = orange (auto-updated)
+                            const fill = isPaired ? '#f59e0b' : isDriven ? '#2563eb' : (isSpare ? (pointIdx === 0 ? '#2563eb' : '#60a5fa') : '#6366f1');
+
+                            // Interactivity: paired edge points are non-interactive. For
+                            // spare edge, allow dragging the first point (index 0) and
+                            // mirror the second; driven edge (bottom) remains draggable.
+                            const interactive = !isPaired && !(isSpare && pointIdx === 1);
+
+                            return (
+                              <motion.circle
+                                key={pointIdx}
+                                cx={p.x}
+                                cy={p.y}
+                                r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
+                                initial={false}
+                                animate={{ r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8, fill }}
+                                className={`stroke-white stroke-[3px] shadow-lg ${
+                                  !interactive ? 'pointer-events-none cursor-default' :
+                                  activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none opacity-50 cursor-default' :
+                                  'cursor-move'
+                                }`}
+                                onMouseDown={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
+                                onTouchStart={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
+                              />
+                            );
+                          })}
+                        </g>
+                      );
+                    }
+
+                    // Non-triangle shapes: render all control points as before
                     return (
-                    <g key={edgeIdx}>
-                      {(points as Point[]).map((p, pointIdx) => (
-                        <motion.circle
-                          key={pointIdx}
-                          cx={p.x}
-                          cy={p.y}
-                          r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
-                          initial={false}
-                          animate={{
-                            r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8,
-                            fill: isSlaveEdge
-                              ? '#f59e0b'
-                              : activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx
-                                ? '#4f46e5' : '#6366f1'
-                          }}
-                          className={`stroke-white stroke-[3px] shadow-lg ${
-                            isSlaveEdge ? 'pointer-events-none cursor-default' :
-                            activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none opacity-50 cursor-default' :
-                            'cursor-move'
-                          }`}
-                          onMouseDown={isSlaveEdge ? undefined : () => handleMouseDown(ei, pointIdx)}
-                          onTouchStart={isSlaveEdge ? undefined : () => handleMouseDown(ei, pointIdx)}
-                        />
-                      ))}
-                    </g>
+                      <g key={edgeIdx}>
+                        {(points as Point[]).map((p, pointIdx) => (
+                          <motion.circle
+                            key={pointIdx}
+                            cx={p.x}
+                            cy={p.y}
+                            r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
+                            initial={false}
+                            animate={{
+                              r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8,
+                              fill: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? '#4f46e5' : '#6366f1'
+                            }}
+                            className={`stroke-white stroke-[3px] shadow-lg ${
+                              activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none opacity-50 cursor-default' :
+                              'cursor-move'
+                            }`}
+                            onMouseDown={() => handleMouseDown(ei, pointIdx)}
+                            onTouchStart={() => handleMouseDown(ei, pointIdx)}
+                          />
+                        ))}
+                      </g>
                     );
                   })}
 
