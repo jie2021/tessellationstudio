@@ -104,6 +104,9 @@ export default function App() {
   const [squareDemoStep, setSquareDemoStep] = useState(0);
   const squareDemoIntervalRef = React.useRef<number | null>(null);
 
+  // Control whether the Edge Editor overlay is shown. Default: hidden.
+  const [showEditor, setShowEditor] = useState(false);
+
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
