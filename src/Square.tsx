@@ -11,7 +11,7 @@ interface Props {
   transformType?: 'rotate90' | 'translate' | 'glide';
 }
 
-export default function Rectangle({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 12, triSymmetry = 'cw', transformType = 'rotate90' }: Props) {
+export default function Square({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 12, triSymmetry = 'cw', transformType = 'rotate90' }: Props) {
   // Build base square vertices (matching App.getBaseVertices for square)
   const sides = 4;
   const startAngle = -Math.PI / 4;
@@ -118,7 +118,7 @@ export default function Rectangle({ tilePathData, colorA, colorB, RADIUS, CENTER
         }
       } else {
         if (transformType === 'translate') {
-          // Render a 4-piece patch at each cell using A,B,B,A ordering
+          // Render a 4-piece patch at each cell using A,B,A,B ordering
           const patchOffsets = [
             { dx: 0, dy: 0, fill: colorA },
             { dx: 0, dy: -baseH, fill: colorB },

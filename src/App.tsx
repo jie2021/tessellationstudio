@@ -13,7 +13,7 @@ import {
   Grid3X3
 } from 'lucide-react';
 
-import Rectangle, { applySquareEdit, Point as RectPoint } from './Rectangle';
+import SquareShape, { applySquareEdit, Point as SquarePoint } from './Square';
 import HexagonShape from './Hexagon';
 import TriangleShape, { initTrianglePaths, applyTriangleEdit, Point as TriPoint } from './Triangle';
 
@@ -323,7 +323,7 @@ export default function App() {
 
       // Delegate square-specific edit behavior
       if (shapeType === 'square') {
-        return applySquareEdit(newPaths, activePoint, baseVertices as RectPoint[], triSymmetry, transformType, CENTER);
+        return applySquareEdit(newPaths, activePoint, baseVertices as SquarePoint[], triSymmetry, transformType, CENTER);
       }
 
       return newPaths;
@@ -889,7 +889,7 @@ export default function App() {
               <g transform={`translate(${offset.x}, ${offset.y}) scale(${zoom})`}>
                 {shapeType === 'square' && (
                   squareDemoMode ? squareDemoTiles : (
-                    <Rectangle tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={triSymmetry} transformType={transformType} />
+                    <SquareShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={triSymmetry} transformType={transformType} />
                   )
                 )}
                 {shapeType === 'hexagon' && (
