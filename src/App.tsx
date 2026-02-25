@@ -231,6 +231,13 @@ export default function App() {
     if (shapeType === 'square') setTransformType('rotate90');
   }, [shapeType]);
 
+  // When the transform type changes, reset any edited control points
+  // so the new transform mode starts from the guideline defaults.
+  useEffect(() => {
+    resetPaths();
+    setActivePoint(null);
+  }, [transformType]);
+
   const stopSquareDemo = () => {
     setSquareDemoMode(false);
     setSquareDemoStep(0);
@@ -734,21 +741,70 @@ export default function App() {
         stepY = Math.max(1, maxY - minY);
       }
 
+      // compute the square guideline centroid for reflection operations
+      const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
+      const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
+
       for (let r = -range; r < range; r++) {
         for (let c = -range; c < range; c++) {
           const tx = c * stepX - CENTER;
           const ty = r * stepY - CENTER;
-          const rot = transformType === 'translate' ? 0 : ((r + c) % 4) * 90;
-          tiles.push(
-            <path
-              key={`sq-${r}-${c}`}
-              d={tilePathData}
-              transform={`translate(${tx}, ${ty}) rotate(${rot}, ${CENTER}, ${CENTER})`}
-              fill={(r + c) % 2 === 0 ? colorA : colorB}
-              stroke="#000"
-              strokeWidth="0.5"
-            />
-          );
+          if (transformType === 'translate') {
+            tiles.push(
+              <path
+                key={`sq-${r}-${c}`}
+                d={tilePathData}
+                transform={`translate(${tx}, ${ty}) rotate(0, ${CENTER}, ${CENTER})`}
+                fill={(r + c) % 2 === 0 ? colorA : colorB}
+                stroke="#000"
+                strokeWidth="0.5"
+              />
+            );
+          } else if (transformType === 'glide') {
+            // Glide tiling: reflect first then translate.
+            // If translation step is vertical-dominant, do left-right reflection (scale(-1,1)).
+            // If translation step is horizontal-dominant, do top-bottom reflection (scale(1,-1)).
+            const verticalDominant = Math.abs(stepY) >= Math.abs(stepX);
+            if (verticalDominant) {
+              // reflect left-right about the guideline center, then translate
+              const tstr = `translate(${tx}, ${ty}) translate(${guideCx}, ${guideCy}) scale(-1,1) translate(${-guideCx}, ${-guideCy})`;
+              tiles.push(
+                <path
+                  key={`sq-${r}-${c}`}
+                  d={tilePathData}
+                  transform={tstr}
+                  fill={(r + c) % 2 === 0 ? colorA : colorB}
+                  stroke="#000"
+                  strokeWidth="0.5"
+                />
+              );
+            } else {
+              // reflect top-bottom about the guideline center, then translate
+              const tstr = `translate(${tx}, ${ty}) translate(${guideCx}, ${guideCy}) scale(1,-1) translate(${-guideCx}, ${-guideCy})`;
+              tiles.push(
+                <path
+                  key={`sq-${r}-${c}`}
+                  d={tilePathData}
+                  transform={tstr}
+                  fill={(r + c) % 2 === 0 ? colorA : colorB}
+                  stroke="#000"
+                  strokeWidth="0.5"
+                />
+              );
+            }
+          } else {
+            const rot = ((r + c) % 4) * 90;
+            tiles.push(
+              <path
+                key={`sq-${r}-${c}`}
+                d={tilePathData}
+                transform={`translate(${tx}, ${ty}) rotate(${rot}, ${CENTER}, ${CENTER})`}
+                fill={(r + c) % 2 === 0 ? colorA : colorB}
+                stroke="#000"
+                strokeWidth="0.5"
+              />
+            );
+          }
         }
       }
     } else if (shapeType === 'hexagon') {
