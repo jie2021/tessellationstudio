@@ -41,14 +41,24 @@ export default function Rectangle({ tilePathData, colorA, colorB, RADIUS, CENTER
   // Compute bounding box of the assembled patch (consider rotation only when appropriate)
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   const angles = transformType === 'translate' ? [0] : [0, 90, 180, 270];
-  for (let k = 0; k < angles.length; k++) {
-    const angle = angles[k];
+  // For glide mode we do not assemble by rotation; use single tile bbox
+  if (transformType === 'glide' || transformType === 'translate') {
     for (const v of baseVertices) {
-      const rp = rotatePoint(v, angle, pivot.x, pivot.y);
-      if (rp.x < minX) minX = rp.x;
-      if (rp.y < minY) minY = rp.y;
-      if (rp.x > maxX) maxX = rp.x;
-      if (rp.y > maxY) maxY = rp.y;
+      if (v.x < minX) minX = v.x;
+      if (v.y < minY) minY = v.y;
+      if (v.x > maxX) maxX = v.x;
+      if (v.y > maxY) maxY = v.y;
+    }
+  } else {
+    for (let k = 0; k < angles.length; k++) {
+      const angle = angles[k];
+      for (const v of baseVertices) {
+        const rp = rotatePoint(v, angle, pivot.x, pivot.y);
+        if (rp.x < minX) minX = rp.x;
+        if (rp.y < minY) minY = rp.y;
+        if (rp.x > maxX) maxX = rp.x;
+        if (rp.y > maxY) maxY = rp.y;
+      }
     }
   }
 
@@ -57,24 +67,59 @@ export default function Rectangle({ tilePathData, colorA, colorB, RADIUS, CENTER
   const height = (isFinite(maxY) && isFinite(minY)) ? Math.max(1, maxY - minY) : RADIUS * Math.SQRT2;
 
   const tiles: React.ReactNode[] = [];
+  // Use patch-size spacing when repeating the 4-piece glide patch across the plane
+  const stepX = transformType === 'glide' ? width * 2 : width;
+  const stepY = transformType === 'glide' ? height * 2 : height;
   for (let r = -range; r < range; r++) {
     for (let c = -range; c < range; c++) {
-      const tx = c * width - CENTER;
-      const ty = r * height - CENTER;
+      const tx = c * stepX - CENTER;
+      const ty = r * stepY - CENTER;
       // For each assembly cell, render rotated copies about the pivot unless translate-only mode
-      const renderAngles = angles;
-      for (let ai = 0; ai < renderAngles.length; ai++) {
-        const angle = renderAngles[ai];
-        tiles.push(
-          <path
-            key={`sq-${r}-${c}-${ai}`}
-            d={tilePathData}
-            transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
-            fill={(r + c) % 2 === 0 ? colorA : colorB}
-            stroke="#000"
-            strokeWidth="0.5"
-          />
-        );
+      if (transformType === 'glide') {
+        // Build 4-piece glide patch and render it with translations + reflections
+        const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
+        const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
+        const glidePieces = [
+          // piece offsets use single tile spacing (base tile)
+          { dx: 0, dy: 0, flipH: false, flipV: false, fill: colorA },
+          { dx: 0, dy: -height, flipH: true, flipV: false, fill: colorB },
+          { dx: -width, dy: 0, flipH: false, flipV: true, fill: colorA },
+          { dx: -width, dy: -height, flipH: true, flipV: true, fill: colorB },
+        ];
+        for (let ai = 0; ai < glidePieces.length; ai++) {
+          const p = glidePieces[ai];
+          let t = `translate(${tx + p.dx}, ${ty + p.dy})`;
+          if (p.flipH || p.flipV) {
+            const sx = p.flipH ? -1 : 1;
+            const sy = p.flipV ? -1 : 1;
+            t += ` translate(${guideCx}, ${guideCy}) scale(${sx}, ${sy}) translate(${-guideCx}, ${-guideCy})`;
+          }
+          tiles.push(
+            <path
+              key={`sq-${r}-${c}-g-${ai}`}
+              d={tilePathData}
+              transform={t}
+              fill={p.fill}
+              stroke="#000"
+              strokeWidth="0.5"
+            />
+          );
+        }
+      } else {
+        const renderAngles = angles;
+        for (let ai = 0; ai < renderAngles.length; ai++) {
+          const angle = renderAngles[ai];
+          tiles.push(
+            <path
+              key={`sq-${r}-${c}-${ai}`}
+              d={tilePathData}
+              transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
+              fill={(r + c) % 2 === 0 ? colorA : colorB}
+              stroke="#000"
+              strokeWidth="0.5"
+            />
+          );
+        }
       }
     }
   }

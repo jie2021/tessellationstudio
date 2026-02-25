@@ -412,7 +412,7 @@ export default function App() {
     //     step 2: base + up (0, -height)
     //     step 3: base + up + up+left (-width, -height)
     //     step 4: base + left (-width, 0)
-    if (transformType === 'translate') {
+    if (transformType === 'translate' || transformType === 'glide') {
       const offsets: {dx:number, dy:number, fill:string}[] = [];
       // base
       offsets.push({ dx: 0, dy: 0, fill: colorA });
@@ -422,17 +422,47 @@ export default function App() {
 
       for (let i = 0; i < offsets.length; i++) {
         const { dx, dy, fill } = offsets[i];
-        arr.push(
-          <path
-            key={`sqdemo-center-patch-${i}`}
-            d={tilePathData}
-            transform={`translate(${dx}, ${dy}) rotate(0, ${pivot.x}, ${pivot.y})`}
-            fill={fill}
-            fillOpacity={1}
-            stroke="#000"
-            strokeWidth={0.5}
-          />
-        );
+        if (transformType === 'translate') {
+          arr.push(
+            <path
+              key={`sqdemo-center-patch-${i}`}
+              d={tilePathData}
+              transform={`translate(${dx}, ${dy})`}
+              fill={fill}
+              fillOpacity={1}
+              stroke="#000"
+              strokeWidth={0.5}
+            />
+          );
+        } else {
+          // glide: for central assembly we apply same piece transforms but include flips
+          const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
+          const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
+          const glidePieces = [
+            { dx: 0, dy: 0, flipH: false, flipV: false, fill: colorA },
+            { dx: 0, dy: -height, flipH: true, flipV: false, fill: colorB },
+            { dx: -width, dy: 0, flipH: false, flipV: true, fill: colorA },
+            { dx: -width, dy: -height, flipH: true, flipV: true, fill: colorB },
+          ];
+          const p = glidePieces[i];
+          let t = `translate(${p.dx}, ${p.dy})`;
+          if (p.flipH || p.flipV) {
+            const sx = p.flipH ? -1 : 1;
+            const sy = p.flipV ? -1 : 1;
+            t += ` translate(${guideCx}, ${guideCy}) scale(${sx}, ${sy}) translate(${-guideCx}, ${-guideCy})`;
+          }
+          arr.push(
+            <path
+              key={`sqdemo-center-patch-${i}`}
+              d={tilePathData}
+              transform={t}
+              fill={p.fill}
+              fillOpacity={1}
+              stroke="#000"
+              strokeWidth={0.5}
+            />
+          );
+        }
       }
     } else {
       const n = Math.min(4, Math.max(1, squareDemoStep));
@@ -457,11 +487,9 @@ export default function App() {
     if (squareDemoStep > 4) {
       const range = 4; // grid radius for revealed assemblies
       const centers: {cx:number, cy:number}[] = [];
-      // When in translate mode, revealed assemblies should jump two cells
-      // per reveal. Use doubled spacing for translate mode so step 5+ moves
-      // by two tile widths/heights each reveal.
-      const spacingX = transformType === 'translate' ? width * 2 : width;
-      const spacingY = transformType === 'translate' ? height * 2 : height;
+      // Revealed assemblies move one tile per reveal (single-cell spacing)
+      const spacingX = width;
+      const spacingY = height;
       for (let r = -range; r <= range; r++) {
         for (let c = -range; c <= range; c++) {
           const cx = c * spacingX;
@@ -481,28 +509,61 @@ export default function App() {
         const tx = cx - 0; // we translate the whole assembly to (cx,cy) relative to pivot
         const ty = cy - 0;
         // For translated assemblies: in translate mode place a single tile; in rotate mode place 4 rotated wedges
-        if (transformType === 'translate') {
+        if (transformType === 'translate' || transformType === 'glide') {
           // Place the whole 1..4 patch at each revealed center
-          const patchOffsets: {dx:number, dy:number, fill:string}[] = [];
-          patchOffsets.push({ dx: 0, dy: 0, fill: colorA });
-          patchOffsets.push({ dx: 0, dy: -height, fill: colorB });
-          patchOffsets.push({ dx: -width, dy: -height, fill: colorA });
-          patchOffsets.push({ dx: -width, dy: 0, fill: colorB });
-          // Only include offsets up to the central patch's current completeness
-          const includeCount = Math.min(patchOffsets.length, Math.max(1, squareDemoStep));
-          for (let j = 0; j < includeCount; j++) {
-            const off = patchOffsets[j];
-            arr.push(
-              <path
-                key={`sqdemo-${i}-patch-${j}`}
-                d={tilePathData}
-                transform={`translate(${tx + off.dx}, ${ty + off.dy}) rotate(0, ${pivot.x}, ${pivot.y})`}
-                fill={off.fill}
-                fillOpacity={1}
-                stroke="#000"
-                strokeWidth={0.5}
-              />
-            );
+          if (transformType === 'translate') {
+            const patchOffsets: {dx:number, dy:number, fill:string}[] = [];
+            patchOffsets.push({ dx: 0, dy: 0, fill: colorA });
+            patchOffsets.push({ dx: 0, dy: -height, fill: colorB });
+            patchOffsets.push({ dx: -width, dy: -height, fill: colorA });
+            patchOffsets.push({ dx: -width, dy: 0, fill: colorB });
+            // Only include offsets up to the central patch's current completeness
+            const includeCount = Math.min(patchOffsets.length, Math.max(1, squareDemoStep));
+            for (let j = 0; j < includeCount; j++) {
+              const off = patchOffsets[j];
+              arr.push(
+                <path
+                  key={`sqdemo-${i}-patch-${j}`}
+                  d={tilePathData}
+                  transform={`translate(${tx + off.dx}, ${ty + off.dy})`}
+                  fill={off.fill}
+                  fillOpacity={1}
+                  stroke="#000"
+                  strokeWidth={0.5}
+                />
+              );
+            }
+          } else {
+            // glide: place glide pieces with flips about guide center
+            const glidePieces = [
+              { dx: 0, dy: 0, flipH: false, flipV: false, fill: colorA },
+              { dx: 0, dy: -height, flipH: true, flipV: false, fill: colorB },
+              { dx: -width, dy: 0, flipH: false, flipV: true, fill: colorA },
+              { dx: -width, dy: -height, flipH: true, flipV: true, fill: colorB },
+            ];
+            const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
+            const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
+            const includeCount = Math.min(glidePieces.length, Math.max(1, squareDemoStep));
+            for (let j = 0; j < includeCount; j++) {
+              const off = glidePieces[j];
+              let t = `translate(${tx + off.dx}, ${ty + off.dy})`;
+              if (off.flipH || off.flipV) {
+                const sx = off.flipH ? -1 : 1;
+                const sy = off.flipV ? -1 : 1;
+                t += ` translate(${guideCx}, ${guideCy}) scale(${sx}, ${sy}) translate(${-guideCx}, ${-guideCy})`;
+              }
+              arr.push(
+                <path
+                  key={`sqdemo-${i}-patch-${j}`}
+                  d={tilePathData}
+                  transform={t}
+                  fill={off.fill}
+                  fillOpacity={1}
+                  stroke="#000"
+                  strokeWidth={0.5}
+                />
+              );
+            }
           }
         } else {
           for (let k = 0; k < 4; k++) {
@@ -587,32 +648,45 @@ export default function App() {
               />
             );
           } else if (transformType === 'glide') {
-            // Glide tiling: reflect first then translate.
-            // If translation step is vertical-dominant, do left-right reflection (scale(-1,1)).
-            // If translation step is horizontal-dominant, do top-bottom reflection (scale(1,-1)).
-            const verticalDominant = Math.abs(stepY) >= Math.abs(stepX);
-            if (verticalDominant) {
-              // reflect left-right about the guideline center, then translate
-              const tstr = `translate(${tx}, ${ty}) translate(${guideCx}, ${guideCy}) scale(-1,1) translate(${-guideCx}, ${-guideCy})`;
+            // Build the 4-piece glide patch per rules and translate it to fill the plane.
+            // Compute base tile bounding box for spacing
+            let bminX = Infinity, bminY = Infinity, bmaxX = -Infinity, bmaxY = -Infinity;
+            for (const v of baseVertices) {
+              if (v.x < bminX) bminX = v.x;
+              if (v.y < bminY) bminY = v.y;
+              if (v.x > bmaxX) bmaxX = v.x;
+              if (v.y > bmaxY) bmaxY = v.y;
+            }
+            const baseW = Math.max(1, bmaxX - bminX);
+            const baseH = Math.max(1, bmaxY - bminY);
+
+            // Glide patch pieces (relative offsets and flip flags)
+            // Rule1: piece A at (0,0)
+            // Rule2: piece B at (0,-baseH) then horizontal flip
+            // Rule3: piece C at (-baseW,0) then vertical flip
+            // Rule4: piece D at (-baseW,-baseH) then both flips
+            const glidePieces: {dx:number, dy:number, flipH:boolean, flipV:boolean, fill:string}[] = [
+              { dx: 0, dy: 0, flipH: false, flipV: false, fill: colorA },
+              { dx: 0, dy: -baseH, flipH: true,  flipV: false, fill: colorB },
+              { dx: -baseW, dy: 0, flipH: false, flipV: true,  fill: colorA },
+              { dx: -baseW, dy: -baseH, flipH: true, flipV: true,  fill: colorB },
+            ];
+
+            // Place the full 4-piece patch at each grid cell, translating by base tile spacing
+            for (let j = 0; j < glidePieces.length; j++) {
+              const p = glidePieces[j];
+              let t = `translate(${tx + p.dx}, ${ty + p.dy})`;
+              if (p.flipH || p.flipV) {
+                const sx = p.flipH ? -1 : 1;
+                const sy = p.flipV ? -1 : 1;
+                t += ` translate(${guideCx}, ${guideCy}) scale(${sx}, ${sy}) translate(${-guideCx}, ${-guideCy})`;
+              }
               tiles.push(
                 <path
-                  key={`sq-${r}-${c}`}
+                  key={`sq-${r}-${c}-g-${j}`}
                   d={tilePathData}
-                  transform={tstr}
-                  fill={(r + c) % 2 === 0 ? colorA : colorB}
-                  stroke="#000"
-                  strokeWidth="0.5"
-                />
-              );
-            } else {
-              // reflect top-bottom about the guideline center, then translate
-              const tstr = `translate(${tx}, ${ty}) translate(${guideCx}, ${guideCy}) scale(1,-1) translate(${-guideCx}, ${-guideCy})`;
-              tiles.push(
-                <path
-                  key={`sq-${r}-${c}`}
-                  d={tilePathData}
-                  transform={tstr}
-                  fill={(r + c) % 2 === 0 ? colorA : colorB}
+                  transform={t}
+                  fill={p.fill}
                   stroke="#000"
                   strokeWidth="0.5"
                 />
