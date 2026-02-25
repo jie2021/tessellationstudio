@@ -1,6 +1,5 @@
-# Tessellation (Next.js migration)
+# Tessellation Studio
 
-Quick notes to get this project running locally after converting from Vite to Next.js.
 
 ## Prerequisites
 - Node.js 18+ (recommended)
