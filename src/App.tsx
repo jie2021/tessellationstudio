@@ -268,11 +268,18 @@ export default function App() {
       const add = Math.max(0, step - 1);
       return `주변을 평행이동으로 채웁니다 — #${add}`;
     }
-
+    if (transformType === 'glide') {
+      if (step === 1) return '기본 도형을 표시합니다.';
+      if (step === 2) return '미끄럼 반사로 위에 붙입니다.';
+      if (step === 3) return '미끄럼 반사로 왼쪽에 붙입니다.';
+      if (step === 4) return '미끄럼 반사로 위 왼쪽에 붙입니다.';
+      const add = step - 4;
+      return `주변을 평행이동으로 채웁니다 — #${add}`;
+    }
     if (step === 1) return '기본 도형을 표시합니다.';
-    if (step === 2) return '왼쪽 위 꼭지점을 기준으로 90도 회전합니다.';
-    if (step === 3) return '같은 기준점에서 180도 회전합니다.';
-    if (step === 4) return '같은 기준점에서 270도 회전합니다.';
+    if (step === 2) return '기준점을 기준으로 90도 회전합니다.';
+    if (step === 3) return '기준점을 기준으로 180도 회전합니다.';
+    if (step === 4) return '기준점을 기준으로 270도 회전합니다.';
     const add = step - 4;
     return `주변을 평행이동으로 채웁니다 — #${add}`;
   };
@@ -378,7 +385,7 @@ export default function App() {
       return { x: cx + rx, y: cy + ry };
     };
 
-    if (transformType === 'translate') {
+    if (transformType === 'translate' || transformType === 'glide') {
       // Use just the base tile's vertices for bounding box
       for (const v of baseVertices) {
         if (v.x < minX) minX = v.x;
@@ -401,6 +408,19 @@ export default function App() {
 
     const width = (isFinite(maxX) && isFinite(minX)) ? Math.max(1, maxX - minX) : RADIUS * Math.SQRT2;
     const height = (isFinite(maxY) && isFinite(minY)) ? Math.max(1, maxY - minY) : RADIUS * Math.SQRT2;
+
+    // Explicit base tile size (from baseVertices) and patch size (2x base)
+    let baseMinX = Infinity, baseMinY = Infinity, baseMaxX = -Infinity, baseMaxY = -Infinity;
+    for (const v of baseVertices) {
+      if (v.x < baseMinX) baseMinX = v.x;
+      if (v.y < baseMinY) baseMinY = v.y;
+      if (v.x > baseMaxX) baseMaxX = v.x;
+      if (v.y > baseMaxY) baseMaxY = v.y;
+    }
+    const baseW = Math.max(1, baseMaxX - baseMinX);
+    const baseH = Math.max(1, baseMaxY - baseMinY);
+    const patchW = baseW * 2;
+    const patchH = baseH * 2;
 
     const arr: React.ReactNode[] = [];
 
@@ -488,8 +508,9 @@ export default function App() {
       const range = 4; // grid radius for revealed assemblies
       const centers: {cx:number, cy:number}[] = [];
       // Revealed assemblies move one tile per reveal (single-cell spacing)
-      const spacingX = width;
-      const spacingY = height;
+      // When revealing translated/ glided assemblies, move the whole 4-piece patch by the patch size
+      const spacingX = patchW;
+      const spacingY = patchH;
       for (let r = -range; r <= range; r++) {
         for (let c = -range; c <= range; c++) {
           const cx = c * spacingX;
@@ -514,9 +535,9 @@ export default function App() {
           if (transformType === 'translate') {
             const patchOffsets: {dx:number, dy:number, fill:string}[] = [];
             patchOffsets.push({ dx: 0, dy: 0, fill: colorA });
-            patchOffsets.push({ dx: 0, dy: -height, fill: colorB });
-            patchOffsets.push({ dx: -width, dy: -height, fill: colorA });
-            patchOffsets.push({ dx: -width, dy: 0, fill: colorB });
+            patchOffsets.push({ dx: 0, dy: -baseH, fill: colorB });
+            patchOffsets.push({ dx: -baseW, dy: -baseH, fill: colorA });
+            patchOffsets.push({ dx: -baseW, dy: 0, fill: colorB });
             // Only include offsets up to the central patch's current completeness
             const includeCount = Math.min(patchOffsets.length, Math.max(1, squareDemoStep));
             for (let j = 0; j < includeCount; j++) {
@@ -537,9 +558,9 @@ export default function App() {
             // glide: place glide pieces with flips about guide center
             const glidePieces = [
               { dx: 0, dy: 0, flipH: false, flipV: false, fill: colorA },
-              { dx: 0, dy: -height, flipH: true, flipV: false, fill: colorB },
-              { dx: -width, dy: 0, flipH: false, flipV: true, fill: colorA },
-              { dx: -width, dy: -height, flipH: true, flipV: true, fill: colorB },
+              { dx: 0, dy: -baseH, flipH: true, flipV: false, fill: colorB },
+              { dx: -baseW, dy: 0, flipH: false, flipV: true, fill: colorA },
+              { dx: -baseW, dy: -baseH, flipH: true, flipV: true, fill: colorB },
             ];
             const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
             const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
@@ -595,7 +616,7 @@ export default function App() {
     );
 
     return arr;
-  }, [squareDemoMode, squareDemoStep, tilePathData, baseVertices, colorA]);
+  }, [squareDemoMode, squareDemoStep, tilePathData, baseVertices, colorA, transformType]);
 
   // Logic for tiling.
   // The tile path is drawn centered at (CENTER, CENTER) in 0-CANVAS_SIZE coordinate space.
