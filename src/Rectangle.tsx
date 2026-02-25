@@ -80,11 +80,11 @@ export default function Rectangle({ tilePathData, colorA, colorB, RADIUS, CENTER
         const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
         const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
         const glidePieces = [
-          // piece offsets use single tile spacing (base tile)
+          // piece offsets use single tile spacing (base tile) — unified background fill A,B,B,A
           { dx: 0, dy: 0, flipH: false, flipV: false, fill: colorA },
           { dx: 0, dy: -height, flipH: true, flipV: false, fill: colorB },
-          { dx: -width, dy: 0, flipH: false, flipV: true, fill: colorA },
-          { dx: -width, dy: -height, flipH: true, flipV: true, fill: colorB },
+          { dx: -width, dy: 0, flipH: false, flipV: true, fill: colorB },
+          { dx: -width, dy: -height, flipH: true, flipV: true, fill: colorA },
         ];
         for (let ai = 0; ai < glidePieces.length; ai++) {
           const p = glidePieces[ai];

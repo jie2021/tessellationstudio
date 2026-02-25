@@ -434,11 +434,11 @@ export default function App() {
     //     step 4: base + left (-width, 0)
     if (transformType === 'translate' || transformType === 'glide') {
       const offsets: {dx:number, dy:number, fill:string}[] = [];
-      // base
+      // base (fill ordering unified to A,B,B,A)
       offsets.push({ dx: 0, dy: 0, fill: colorA });
       if (squareDemoStep >= 2) offsets.push({ dx: 0, dy: -height, fill: colorB });
-      if (squareDemoStep >= 3) offsets.push({ dx: -width, dy: -height, fill: colorA });
-      if (squareDemoStep >= 4) offsets.push({ dx: -width, dy: 0, fill: colorB });
+      if (squareDemoStep >= 3) offsets.push({ dx: -width, dy: -height, fill: colorB });
+      if (squareDemoStep >= 4) offsets.push({ dx: -width, dy: 0, fill: colorA });
 
       for (let i = 0; i < offsets.length; i++) {
         const { dx, dy, fill } = offsets[i];
@@ -461,8 +461,8 @@ export default function App() {
           const glidePieces = [
             { dx: 0, dy: 0, flipH: false, flipV: false, fill: colorA },
             { dx: 0, dy: -height, flipH: true, flipV: false, fill: colorB },
-            { dx: -width, dy: 0, flipH: false, flipV: true, fill: colorA },
-            { dx: -width, dy: -height, flipH: true, flipV: true, fill: colorB },
+            { dx: -width, dy: 0, flipH: false, flipV: true, fill: colorB },
+            { dx: -width, dy: -height, flipH: true, flipV: true, fill: colorA },
           ];
           const p = glidePieces[i];
           let t = `translate(${p.dx}, ${p.dy})`;
@@ -534,10 +534,11 @@ export default function App() {
           // Place the whole 1..4 patch at each revealed center
           if (transformType === 'translate') {
             const patchOffsets: {dx:number, dy:number, fill:string}[] = [];
+            // background/revealed patch fill ordering unified to A,B,B,A
             patchOffsets.push({ dx: 0, dy: 0, fill: colorA });
             patchOffsets.push({ dx: 0, dy: -baseH, fill: colorB });
-            patchOffsets.push({ dx: -baseW, dy: -baseH, fill: colorA });
-            patchOffsets.push({ dx: -baseW, dy: 0, fill: colorB });
+            patchOffsets.push({ dx: -baseW, dy: -baseH, fill: colorB });
+            patchOffsets.push({ dx: -baseW, dy: 0, fill: colorA });
             // Only include offsets up to the central patch's current completeness
             const includeCount = Math.min(patchOffsets.length, Math.max(1, squareDemoStep));
             for (let j = 0; j < includeCount; j++) {
@@ -558,9 +559,9 @@ export default function App() {
             // glide: place glide pieces with flips about guide center
             const glidePieces = [
               { dx: 0, dy: 0, flipH: false, flipV: false, fill: colorA },
-              { dx: 0, dy: -baseH, flipH: true, flipV: false, fill: colorB },
-              { dx: -baseW, dy: 0, flipH: false, flipV: true, fill: colorA },
-              { dx: -baseW, dy: -baseH, flipH: true, flipV: true, fill: colorB },
+              { dx: 0, dy: -baseH, flipH: true,  flipV: false, fill: colorB },
+              { dx: -baseW, dy: 0, flipH: false, flipV: true,  fill: colorB },
+              { dx: -baseW, dy: -baseH, flipH: true, flipV: true,  fill: colorA },
             ];
             const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
             const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
