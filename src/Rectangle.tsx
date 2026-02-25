@@ -66,10 +66,21 @@ export default function Rectangle({ tilePathData, colorA, colorB, RADIUS, CENTER
   const width = (isFinite(maxX) && isFinite(minX)) ? Math.max(1, maxX - minX) : RADIUS * Math.SQRT2;
   const height = (isFinite(maxY) && isFinite(minY)) ? Math.max(1, maxY - minY) : RADIUS * Math.SQRT2;
 
+  // Also compute explicit base tile size for translate patch offsets
+  let baseMinX = Infinity, baseMinY = Infinity, baseMaxX = -Infinity, baseMaxY = -Infinity;
+  for (const v of baseVertices) {
+    if (v.x < baseMinX) baseMinX = v.x;
+    if (v.y < baseMinY) baseMinY = v.y;
+    if (v.x > baseMaxX) baseMaxX = v.x;
+    if (v.y > baseMaxY) baseMaxY = v.y;
+  }
+  const baseW = Math.max(1, baseMaxX - baseMinX);
+  const baseH = Math.max(1, baseMaxY - baseMinY);
+
   const tiles: React.ReactNode[] = [];
-  // Use patch-size spacing when repeating the 4-piece glide patch across the plane
-  const stepX = transformType === 'glide' ? width * 2 : width;
-  const stepY = transformType === 'glide' ? height * 2 : height;
+  // Use patch-size spacing (2× base tile) for translate/glide to match demo patch spacing
+  const stepX = (transformType === 'translate' || transformType === 'glide') ? baseW * 2 : width;
+  const stepY = (transformType === 'translate' || transformType === 'glide') ? baseH * 2 : height;
   for (let r = -range; r < range; r++) {
     for (let c = -range; c < range; c++) {
       const tx = c * stepX - CENTER;
@@ -106,19 +117,43 @@ export default function Rectangle({ tilePathData, colorA, colorB, RADIUS, CENTER
           );
         }
       } else {
-        const renderAngles = angles;
-        for (let ai = 0; ai < renderAngles.length; ai++) {
-          const angle = renderAngles[ai];
-          tiles.push(
-            <path
-              key={`sq-${r}-${c}-${ai}`}
-              d={tilePathData}
-              transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
-              fill={(r + c) % 2 === 0 ? colorA : colorB}
-              stroke="#000"
-              strokeWidth="0.5"
-            />
-          );
+        if (transformType === 'translate') {
+          // Render a 4-piece patch at each cell using A,B,B,A ordering
+          const patchOffsets = [
+            { dx: 0, dy: 0, fill: colorA },
+            { dx: 0, dy: -baseH, fill: colorB },
+            { dx: -baseW, dy: -baseH, fill: colorA },
+            { dx: -baseW, dy: 0, fill: colorB },
+          ];
+          for (let pi = 0; pi < patchOffsets.length; pi++) {
+            const off = patchOffsets[pi];
+            tiles.push(
+              <path
+                key={`sq-${r}-${c}-t-${pi}`}
+                d={tilePathData}
+                transform={`translate(${tx + off.dx}, ${ty + off.dy})`}
+                fill={off.fill}
+                stroke="#000"
+                strokeWidth="0.5"
+              />
+            );
+          }
+        } else {
+          const renderAngles = angles;
+          for (let ai = 0; ai < renderAngles.length; ai++) {
+            const angle = renderAngles[ai];
+            const wedgeFill = (ai % 2 === 0) ? colorA : colorB;
+            tiles.push(
+              <path
+                key={`sq-${r}-${c}-${ai}`}
+                d={tilePathData}
+                transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
+                fill={wedgeFill}
+                stroke="#000"
+                strokeWidth="0.5"
+              />
+            );
+          }
         }
       }
     }
