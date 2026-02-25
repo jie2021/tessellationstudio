@@ -13,9 +13,9 @@ import {
   Grid3X3
 } from 'lucide-react';
 
-import SquareShape, { applySquareEdit, Point as SquarePoint } from './Square';
+import SquareShape, { applySquareEdit, Point as SquarePoint, buildSquareDemoTiles, renderSquareControls, startSquareDemo, stopSquareDemo, nextSquareStep, prevSquareStep, getSquareDemoText as squareGetDemoText } from './Square';
 import HexagonShape from './Hexagon';
-import TriangleShape, { initTrianglePaths, applyTriangleEdit, Point as TriPoint } from './Triangle';
+import TriangleShape, { initTrianglePaths, applyTriangleEdit, Point as TriPoint, startTriangleDemo, stopTriangleDemo, renderTriangleControls, nextTriangleStep, prevTriangleStep, getTriangleDemoText, triangleAutoAdvance } from './Triangle';
 
 // --- Types ---
 
@@ -147,47 +147,10 @@ export default function App() {
 
   const resetPaths = () => setEdgePaths({});
 
-  const stopDemo = () => {
-    setDemoMode(false);
-    setDemoStep(0);
-    if (demoIntervalRef.current) {
-      window.clearInterval(demoIntervalRef.current);
-      demoIntervalRef.current = null;
-    }
-  };
-
-  const startDemo = () => {
-    // Ensure triangle mode and reset editor
-    setShapeType('triangle');
-    // Use the current edited shape for the demo (do not reset paths)
-    // prepare demo centers (sorted by distance) and start at step 0
-    const s = RADIUS * Math.sqrt(3);
-    const stepX = s * 1.5;
-    const stepY = s * Math.sqrt(3);
-    const demoRange = 4;
-    const centers: {cx:number, cy:number}[] = [];
-    for (let row = -demoRange; row <= demoRange; row++) {
-      for (let col = -demoRange; col <= demoRange; col++) {
-        if (row === 0 && col === 0) continue;
-        const hexCX = col * stepX;
-        const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
-        centers.push({cx: hexCX, cy: hexCY});
-      }
-    }
-    centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
-    setDemoCenters(centers);
-    setDemoMode(true);
-    setDemoStep(0);
-  };
+  const handleStopDemo = () => stopTriangleDemo({ setDemoMode, setDemoStep, demoIntervalRef });
 
   // --- Square demo controls ---
-  const startSquareDemo = () => {
-    setShapeType('square');
-    setSquareDemoMode(true);
-    setSquareDemoStep(1);
-    // Ensure editor is hidden while demo runs
-    try { setShowEditor(false); } catch(e) {}
-  };
+  // Delegated to `src/Square.tsx` via `startSquareDemo` / `stopSquareDemo` helpers.
 
   // When switching to square, default the transform type to 90° rotation
   useEffect(() => {
@@ -201,18 +164,10 @@ export default function App() {
     setActivePoint(null);
   }, [transformType]);
 
-  const stopSquareDemo = () => {
-    setSquareDemoMode(false);
-    setSquareDemoStep(0);
-    if (squareDemoIntervalRef.current) {
-      window.clearInterval(squareDemoIntervalRef.current);
-      squareDemoIntervalRef.current = null;
-    }
-  };
+  // stopSquareDemo is provided by Square.tsx when needed.
 
   // Allow many translation reveal steps; cap is generous (4 rotations + 80 translations)
-  const nextSquareStep = () => setSquareDemoStep(s => Math.min(s + 1, 4 + 80));
-  const prevSquareStep = () => setSquareDemoStep(s => Math.max(s - 1, 1));
+  // next/prev delegated to Square.tsx helpers
 
   // cleanup interval on unmount
   useEffect(() => {
@@ -228,61 +183,15 @@ export default function App() {
   // surrounding-hexes phase (demoStep > 6) skip incremental reveal and
   // immediately show all surrounding hexes by advancing demoStep to full.
   useEffect(() => {
-    if (!demoMode) return;
-    // only apply when we've moved past the central 6-triangle explanation
-    if (demoStep <= 12) return;
-    if (demoCenters.length >= 13) {
-      const full = 6 + demoCenters.length;
-      if (demoStep !== full) setDemoStep(full);
-    }
+    triangleAutoAdvance(demoMode, demoStep, demoCenters.length, setDemoStep);
   }, [demoMode, demoStep, demoCenters.length]);
 
-  const nextDemoStep = () => {
-    const max = 6 + demoCenters.length;
-    setDemoStep(prev => Math.min(prev + 1, max));
-  };
+  const nextDemoStep = () => nextTriangleStep(setDemoStep);
+  const prevDemoStep = () => prevTriangleStep(setDemoStep);
 
-  const prevDemoStep = () => {
-    setDemoStep(prev => Math.max(prev - 1, 0));
-  };
+  const getDemoText = (step: number) => getTriangleDemoText(step, triSymmetry);
 
-  const getDemoText = (step: number) => {
-    if (step === 0) return '데모 준비 중... (다음 버튼을 눌러 시작하세요)';
-    // Step 1: prepare the edited tile
-    if (step === 1) return '변형된 도형을 준비합니다.';
-    if (step >= 2 && step <= 6) {
-      const k = step - 1;
-      const angle = k * 60 * (triSymmetry === 'cw' ? 1 : -1);
-      return `기준점을 기준으로 ${angle}도 회전합니다.`;
-    }
-    const hexes = Math.max(0, step - 6);
-    if (hexes === 0) return '중앙 육각형 완성 — 다음 버튼을 눌러 주변 육각형을 하나씩 추가하세요.';
-    return `주변 육각형 #${hexes}는 밀어서 복사합니다.`;
-  };
-
-  const getSquareDemoText = (step: number) => {
-    if (step <= 0) return '데모 준비 중... (다음 버튼을 눌러 시작하세요)';
-    if (transformType === 'translate') {
-      if (step === 1) return '기본 도형을 표시합니다.';
-      // if (step >= 2 && step <= 4) return `기준점을 기준으로 동일한 도형을 평행이동으로 복사합니다 (스텝 ${step - 1}).`;
-      const add = Math.max(0, step - 1);
-      return `주변을 평행이동으로 채웁니다 — #${add}`;
-    }
-    if (transformType === 'glide') {
-      if (step === 1) return '기본 도형을 표시합니다.';
-      if (step === 2) return '미끄럼 반사로 위에 붙입니다.';
-      if (step === 3) return '미끄럼 반사로 왼쪽에 붙입니다.';
-      if (step === 4) return '미끄럼 반사로 위 왼쪽에 붙입니다.';
-      const add = step - 4;
-      return `주변을 평행이동으로 채웁니다 — #${add}`;
-    }
-    if (step === 1) return '기본 도형을 표시합니다.';
-    if (step === 2) return '기준점을 기준으로 90도 회전합니다.';
-    if (step === 3) return '기준점을 기준으로 180도 회전합니다.';
-    if (step === 4) return '기준점을 기준으로 270도 회전합니다.';
-    const add = step - 4;
-    return `주변을 평행이동으로 채웁니다 — #${add}`;
-  };
+  const getSquareDemoText = (step: number) => squareGetDemoText(step, transformType);
 
   const handleMouseDown = (edgeIdx: number, pointIdx: number) => {
     setActivePoint({ edgeIdx, pointIdx });
@@ -362,262 +271,11 @@ export default function App() {
     return d;
   }, [baseVertices, currentEdgePaths, useCurve]);
 
-  // Precompute square demo tiles (rotated copies around bottom-right pivot)
-  const squareDemoTiles = useMemo(() => {
-    if (!squareDemoMode || shapeType !== 'square') return null;
-    if (!baseVertices || baseVertices.length === 0) return null;
-    // pivot = top-left vertex (min x+y) — use for demo clarity per request
-    let pivot = baseVertices[0];
-    for (const v of baseVertices) {
-      if (v.x + v.y < pivot.x + pivot.y) pivot = v;
-    }
-
-    // Compute bounding box used to determine translation grid.
-    // For `translate` mode we only need the base tile (no 4-rotation assembly),
-    // otherwise compute bounding box of the 4-rotation patch.
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    const rotatePoint = (p: { x: number; y: number }, angleDeg: number, cx: number, cy: number) => {
-      const a = (angleDeg * Math.PI) / 180;
-      const dx = p.x - cx;
-      const dy = p.y - cy;
-      const rx = Math.cos(a) * dx - Math.sin(a) * dy;
-      const ry = Math.sin(a) * dx + Math.cos(a) * dy;
-      return { x: cx + rx, y: cy + ry };
-    };
-
-    if (transformType === 'translate' || transformType === 'glide') {
-      // Use just the base tile's vertices for bounding box
-      for (const v of baseVertices) {
-        if (v.x < minX) minX = v.x;
-        if (v.y < minY) minY = v.y;
-        if (v.x > maxX) maxX = v.x;
-        if (v.y > maxY) maxY = v.y;
-      }
-    } else {
-      for (let k = 0; k < 4; k++) {
-        const angle = k * 90;
-        for (const v of baseVertices) {
-          const rp = rotatePoint(v, angle, pivot.x, pivot.y);
-          if (rp.x < minX) minX = rp.x;
-          if (rp.y < minY) minY = rp.y;
-          if (rp.x > maxX) maxX = rp.x;
-          if (rp.y > maxY) maxY = rp.y;
-        }
-      }
-    }
-
-    const width = (isFinite(maxX) && isFinite(minX)) ? Math.max(1, maxX - minX) : RADIUS * Math.SQRT2;
-    const height = (isFinite(maxY) && isFinite(minY)) ? Math.max(1, maxY - minY) : RADIUS * Math.SQRT2;
-
-    // Explicit base tile size (from baseVertices) and patch size (2x base)
-    let baseMinX = Infinity, baseMinY = Infinity, baseMaxX = -Infinity, baseMaxY = -Infinity;
-    for (const v of baseVertices) {
-      if (v.x < baseMinX) baseMinX = v.x;
-      if (v.y < baseMinY) baseMinY = v.y;
-      if (v.x > baseMaxX) baseMaxX = v.x;
-      if (v.y > baseMaxY) baseMaxY = v.y;
-    }
-    const baseW = Math.max(1, baseMaxX - baseMinX);
-    const baseH = Math.max(1, baseMaxY - baseMinY);
-    const patchW = baseW * 2;
-    const patchH = baseH * 2;
-
-    const arr: React.ReactNode[] = [];
-
-    // Show the central assembly:
-    // - rotate mode: reveal 1..4 rotated wedges around pivot
-    // - translate mode: reveal a 4-piece "patch" built from the base tile
-    //   where steps map as:
-    //     step 1: base
-    //     step 2: base + up (0, -height)
-    //     step 3: base + up + up+left (-width, -height)
-    //     step 4: base + left (-width, 0)
-    if (transformType === 'translate' || transformType === 'glide') {
-      const offsets: {dx:number, dy:number, fill:string}[] = [];
-      // base (fill ordering unified to A,B,B,A)
-      offsets.push({ dx: 0, dy: 0, fill: colorA });
-      if (squareDemoStep >= 2) offsets.push({ dx: 0, dy: -height, fill: colorB });
-      if (squareDemoStep >= 3) offsets.push({ dx: -width, dy: -height, fill: colorA });
-      if (squareDemoStep >= 4) offsets.push({ dx: -width, dy: 0, fill: colorB });
-
-      for (let i = 0; i < offsets.length; i++) {
-        const { dx, dy, fill } = offsets[i];
-        if (transformType === 'translate') {
-          arr.push(
-            <path
-              key={`sqdemo-center-patch-${i}`}
-              d={tilePathData}
-              transform={`translate(${dx}, ${dy})`}
-              fill={fill}
-              fillOpacity={1}
-              stroke="#000"
-              strokeWidth={0.5}
-            />
-          );
-        } else {
-          // glide: for central assembly we apply same piece transforms but include flips
-          const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
-          const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
-          const glidePieces = [
-            { dx: 0, dy: 0, flipH: false, flipV: false, fill: colorA },
-            { dx: 0, dy: -height, flipH: true, flipV: false, fill: colorB },
-            { dx: -width, dy: 0, flipH: false, flipV: true, fill: colorB },
-            { dx: -width, dy: -height, flipH: true, flipV: true, fill: colorA },
-          ];
-          const p = glidePieces[i];
-          let t = `translate(${p.dx}, ${p.dy})`;
-          if (p.flipH || p.flipV) {
-            const sx = p.flipH ? -1 : 1;
-            const sy = p.flipV ? -1 : 1;
-            t += ` translate(${guideCx}, ${guideCy}) scale(${sx}, ${sy}) translate(${-guideCx}, ${-guideCy})`;
-          }
-          arr.push(
-            <path
-              key={`sqdemo-center-patch-${i}`}
-              d={tilePathData}
-              transform={t}
-              fill={p.fill}
-              fillOpacity={1}
-              stroke="#000"
-              strokeWidth={0.5}
-            />
-          );
-        }
-      }
-    } else {
-      const n = Math.min(4, Math.max(1, squareDemoStep));
-      for (let k = 0; k < n; k++) {
-        const angle = k * 90;
-        const wedgeFill = (k % 2 === 0) ? colorA : colorB;
-        arr.push(
-          <path
-            key={`sqdemo-center-${k}`}
-            d={tilePathData}
-            transform={`rotate(${angle}, ${pivot.x}, ${pivot.y})`}
-            fill={wedgeFill}
-            fillOpacity={1}
-            stroke="#000"
-            strokeWidth={0.5}
-          />
-        );
-      }
-    }
-
-    // If step > 4, reveal translated assemblies one by one
-    if (squareDemoStep > 4) {
-      const range = 4; // grid radius for revealed assemblies
-      const centers: {cx:number, cy:number}[] = [];
-      // Revealed assemblies move one tile per reveal (single-cell spacing)
-      // When revealing translated/ glided assemblies, move the whole 4-piece patch by the patch size
-      const spacingX = patchW;
-      const spacingY = patchH;
-      for (let r = -range; r <= range; r++) {
-        for (let c = -range; c <= range; c++) {
-          const cx = c * spacingX;
-          const cy = r * spacingY;
-          // skip central (0,0) — already shown
-          if (Math.abs(cx) < 1e-6 && Math.abs(cy) < 1e-6) continue;
-          centers.push({ cx, cy });
-        }
-      }
-      centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
-
-      const requested = squareDemoStep - 4;
-      // If requested reveal index reaches 9 or more, show all at once
-      const reveal = (requested >= 9) ? centers.length : Math.min(centers.length, requested);
-      for (let i = 0; i < reveal; i++) {
-        const { cx, cy } = centers[i];
-        const tx = cx - 0; // we translate the whole assembly to (cx,cy) relative to pivot
-        const ty = cy - 0;
-        // For translated assemblies: in translate mode place a single tile; in rotate mode place 4 rotated wedges
-        if (transformType === 'translate' || transformType === 'glide') {
-          // Place the whole 1..4 patch at each revealed center
-          if (transformType === 'translate') {
-            const patchOffsets: {dx:number, dy:number, fill:string}[] = [];
-            // background/revealed patch fill ordering unified to A,B,B,A
-            patchOffsets.push({ dx: 0, dy: 0, fill: colorA });
-            patchOffsets.push({ dx: 0, dy: -baseH, fill: colorB });
-            patchOffsets.push({ dx: -baseW, dy: -baseH, fill: colorA });
-            patchOffsets.push({ dx: -baseW, dy: 0, fill: colorB });
-            // Only include offsets up to the central patch's current completeness
-            const includeCount = Math.min(patchOffsets.length, Math.max(1, squareDemoStep));
-            for (let j = 0; j < includeCount; j++) {
-              const off = patchOffsets[j];
-              arr.push(
-                <path
-                  key={`sqdemo-${i}-patch-${j}`}
-                  d={tilePathData}
-                  transform={`translate(${tx + off.dx}, ${ty + off.dy})`}
-                  fill={off.fill}
-                  fillOpacity={1}
-                  stroke="#000"
-                  strokeWidth={0.5}
-                />
-              );
-            }
-          } else {
-            // glide: place glide pieces with flips about guide center
-            const glidePieces = [
-              { dx: 0, dy: 0, flipH: false, flipV: false, fill: colorA },
-              { dx: 0, dy: -baseH, flipH: true,  flipV: false, fill: colorB },
-              { dx: -baseW, dy: 0, flipH: false, flipV: true,  fill: colorB },
-              { dx: -baseW, dy: -baseH, flipH: true, flipV: true,  fill: colorA },
-            ];
-            const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
-            const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
-            const includeCount = Math.min(glidePieces.length, Math.max(1, squareDemoStep));
-            for (let j = 0; j < includeCount; j++) {
-              const off = glidePieces[j];
-              let t = `translate(${tx + off.dx}, ${ty + off.dy})`;
-              if (off.flipH || off.flipV) {
-                const sx = off.flipH ? -1 : 1;
-                const sy = off.flipV ? -1 : 1;
-                t += ` translate(${guideCx}, ${guideCy}) scale(${sx}, ${sy}) translate(${-guideCx}, ${-guideCy})`;
-              }
-              arr.push(
-                <path
-                  key={`sqdemo-${i}-patch-${j}`}
-                  d={tilePathData}
-                  transform={t}
-                  fill={off.fill}
-                  fillOpacity={1}
-                  stroke="#000"
-                  strokeWidth={0.5}
-                />
-              );
-            }
-          }
-        } else {
-          for (let k = 0; k < 4; k++) {
-            const angle = k * 90;
-            const wedgeFill = (k % 2 === 0) ? colorA : colorB;
-            arr.push(
-              <path
-                key={`sqdemo-${i}-${k}`}
-                d={tilePathData}
-                transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
-                fill={wedgeFill}
-                fillOpacity={1}
-                stroke="#000"
-                strokeWidth={0.5}
-              />
-            );
-          }
-        }
-      }
-    }
-
-    // pivot marker for demo clarity
-    arr.push(
-      <g key="sqdemo-pivot" pointerEvents="none">
-        <circle cx={pivot.x} cy={pivot.y} r={8} fill="#ef4444" stroke="#fff" strokeWidth={2} />
-        <circle cx={pivot.x} cy={pivot.y} r={4} fill="#fff" />
-        <text x={pivot.x + 12} y={pivot.y + 4} fontSize={12} fill="#111" fontWeight={600}>기준점</text>
-      </g>
-    );
-
-    return arr;
-  }, [squareDemoMode, squareDemoStep, tilePathData, baseVertices, colorA, transformType]);
+  // Precompute square demo tiles (delegated to Square.tsx)
+  const squareDemoTiles = useMemo(() =>
+    buildSquareDemoTiles({ squareDemoMode, squareDemoStep, tilePathData, baseVertices, colorA, colorB, transformType, RADIUS }),
+    [squareDemoMode, squareDemoStep, tilePathData, baseVertices, colorA, colorB, transformType, RADIUS]
+  );
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-neutral-50 lg:overflow-hidden font-sans">
@@ -952,108 +610,13 @@ export default function App() {
                     const ei = Number(edgeIdx);
 
                     if (shapeType === 'triangle') {
-                      const driven = 1;
-                      const paired = triSymmetry === 'cw' ? (driven + 2) % 3 : (driven + 1) % 3;
-                      const spare = [0,1,2].find(x => x !== driven && x !== paired)!;
-
-                      // Only render driven, paired and spare edges in triangle mode
-                      if (![driven, paired, spare].includes(ei)) return null;
-
-                      return (
-                        <g key={edgeIdx}>
-                          {(points as Point[]).map((p, pointIdx) => {
-                            const isDriven = ei === driven;
-                            const isPaired = ei === paired;
-                            const isSpare = ei === spare;
-
-                            // Visuals: driven = solid blue, spare = two blues (one active,
-                            // one mirrored), paired = orange (auto-updated)
-                            let fill = isPaired ? '#f59e0b' : isDriven ? '#2563eb' : (isSpare ? (pointIdx === 0 ? '#2563eb' : '#60a5fa') : '#6366f1');
-
-                            // Interactivity: paired edge points are non-interactive. For
-                            // spare edge, allow dragging the first point (index 0) and
-                            // mirror the second; driven edge (bottom) remains draggable.
-                            const interactive = !isPaired && !(isSpare && pointIdx === 1);
-                            // Make interactive (draggable) points blue; auto-updated remain orange
-                            if (interactive) fill = '#2563eb';
-
-                            return (
-                              <motion.circle
-                                key={pointIdx}
-                                cx={p.x}
-                                cy={p.y}
-                                r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
-                                initial={false}
-                                animate={{ r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8, fill }}
-                                className={`stroke-white stroke-[3px] shadow-lg ${
-                                  !interactive ? 'pointer-events-none cursor-default' :
-                                  activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none cursor-default' :
-                                  'cursor-move'
-                                }`}
-                                onMouseDown={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
-                                onTouchStart={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
-                              />
-                            );
-                          })}
-                        </g>
-                      );
+                      return renderTriangleControls({ ei, points: points as Point[], activePoint, triSymmetry, handleMouseDown });
                     }
 
                     // Non-triangle shapes: special-case square so bottom edge is draggable
                     // and the paired edge is shown orange and non-interactive
                     if (shapeType === 'square') {
-                      const driven = 3; // bottom edge
-                      const paired = triSymmetry === 'cw' ? (driven + 1) % 4 : (driven + 3) % 4; // cw -> right(0), ccw -> left(2)
-                      const leftIdx = 2;
-                      const topIdx = 1;
-                      const rightIdx = triSymmetry === 'cw' ? 0 : 2;
-                      return (
-                        <g key={edgeIdx}>
-                          {(points as Point[]).map((p, pointIdx) => {
-                            const isDriven = ei === driven;
-                            const isPaired = ei === paired;
-                            const isLeft = ei === leftIdx;
-                            // Determine interactivity and fill color.
-                            let interactive = !isPaired && !(activePoint && activePoint.edgeIdx !== ei);
-
-                            // If translate or glide mode is active, only allow top and right edges to be interactive
-                            if (transformType === 'translate' || transformType === 'glide') {
-                              interactive = (ei === topIdx || ei === rightIdx) && !(activePoint && activePoint.edgeIdx !== ei);
-                            }
-
-                            // In 90° rotation mode, left edge should NOT be interactive
-                            if (transformType === 'rotate90' && ei === leftIdx) {
-                              interactive = false;
-                            }
-
-                            // Fill color rules: interactive -> blue; non-interactive left/bottom/paired -> orange; fallback gray
-                            let fill = '#6366f1';
-                            if (interactive) {
-                              fill = '#2563eb';
-                            } else if (ei === leftIdx || ei === driven || isPaired) {
-                              fill = '#f59e0b';
-                            }
-
-                            return (
-                              <motion.circle
-                                key={pointIdx}
-                                cx={p.x}
-                                cy={p.y}
-                                r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
-                                initial={false}
-                                animate={{ r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8, fill }}
-                                className={`stroke-white stroke-[3px] shadow-lg ${
-                                  !interactive ? 'pointer-events-none cursor-default' :
-                                  activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none opacity-50 cursor-default' :
-                                  'cursor-move'
-                                }`}
-                                onMouseDown={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
-                                onTouchStart={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
-                              />
-                            );
-                          })}
-                        </g>
-                      );
+                      return renderSquareControls({ ei, points: points as Point[], activePoint, triSymmetry, transformType, handleMouseDown });
                     }
 
                     // Fallback for other non-triangle shapes
@@ -1118,10 +681,10 @@ export default function App() {
                 className="absolute bottom-36 left-1/2 -translate-x-1/2 bg-white/95 px-5 py-3 rounded-2xl shadow-lg border border-neutral-100 text-sm font-medium text-neutral-700 flex items-center gap-3 pointer-events-auto"
               >
                 <div className="max-w-[48ch] text-center">{getDemoText(demoStep)}</div>
-                <div className="ml-2 flex items-center gap-2">
+                  <div className="ml-2 flex items-center gap-2">
                   <button onClick={prevDemoStep} className="px-3 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200">이전</button>
                   <button onClick={nextDemoStep} className="px-3 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">다음</button>
-                  <button onClick={stopDemo} className="px-3 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600">종료</button>
+                  <button onClick={handleStopDemo} className="px-3 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600">종료</button>
                 </div>
               </motion.div>
             </AnimatePresence>
@@ -1142,9 +705,9 @@ export default function App() {
               >
                 <div className="max-w-[48ch] text-center">{getSquareDemoText(squareDemoStep)}</div>
                 <div className="ml-2 flex items-center gap-2">
-                  <button onClick={prevSquareStep} className="px-3 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200">이전</button>
-                  <button onClick={nextSquareStep} className="px-3 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">다음</button>
-                  <button onClick={stopSquareDemo} className="px-3 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600">종료</button>
+                  <button onClick={() => prevSquareStep(setSquareDemoStep)} className="px-3 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200">이전</button>
+                  <button onClick={() => nextSquareStep(setSquareDemoStep)} className="px-3 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">다음</button>
+                  <button onClick={() => stopSquareDemo({ setSquareDemoMode, setSquareDemoStep, squareDemoIntervalRef })} className="px-3 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600">종료</button>
                 </div>
               </motion.div>
             </AnimatePresence>
@@ -1179,7 +742,10 @@ export default function App() {
           <div className="w-px h-8 bg-neutral-200" />
           {!demoMode && (
             <button
-              onClick={() => { if (shapeType === 'triangle') startDemo(); else if (shapeType === 'square') startSquareDemo(); }}
+              onClick={() => {
+                if (shapeType === 'triangle') startTriangleDemo({ setShapeType, setDemoCenters, setDemoMode, setDemoStep, demoIntervalRef, RADIUS });
+                else if (shapeType === 'square') startSquareDemo({ setShapeType, setSquareDemoMode, setSquareDemoStep, setShowEditor });
+              }}
               className="px-3 py-2 rounded-full font-bold text-sm transition bg-indigo-600 text-white hover:bg-indigo-700"
               title="설명하기"
             >

@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 
 interface Center { cx: number; cy: number }
 
@@ -111,6 +112,88 @@ export function applyTriangleEdit(newPaths: Record<number, Point[]>, activePoint
   return newPaths;
 }
 
+export function startDemo(params: {
+  setShapeType: (s: 'triangle' | 'square' | 'hexagon') => void;
+  setDemoCenters: React.Dispatch<React.SetStateAction<{cx:number, cy:number}[]>>;
+  setDemoMode: React.Dispatch<React.SetStateAction<boolean>>;
+  setDemoStep: React.Dispatch<React.SetStateAction<number>>;
+  demoIntervalRef: React.MutableRefObject<number | null>;
+  RADIUS: number;
+}) {
+  const { setShapeType, setDemoCenters, setDemoMode, setDemoStep, demoIntervalRef, RADIUS } = params;
+  setShapeType('triangle');
+  const s = RADIUS * Math.sqrt(3);
+  const stepX = s * 1.5;
+  const stepY = s * Math.sqrt(3);
+  const demoRange = 4;
+  const centers: {cx:number, cy:number}[] = [];
+  for (let row = -demoRange; row <= demoRange; row++) {
+    for (let col = -demoRange; col <= demoRange; col++) {
+      if (row === 0 && col === 0) continue;
+      const hexCX = col * stepX;
+      const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
+      centers.push({cx: hexCX, cy: hexCY});
+    }
+  }
+  centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
+  setDemoCenters(centers);
+  setDemoMode(true);
+  setDemoStep(1);
+}
+
+export function stopDemo(params: {
+  setDemoMode: React.Dispatch<React.SetStateAction<boolean>>;
+  setDemoStep: React.Dispatch<React.SetStateAction<number>>;
+  demoIntervalRef: React.MutableRefObject<number | null>;
+}) {
+  const { setDemoMode, setDemoStep, demoIntervalRef } = params;
+  setDemoMode(false);
+  setDemoStep(0);
+  if (demoIntervalRef.current) {
+    window.clearInterval(demoIntervalRef.current);
+    demoIntervalRef.current = null;
+  }
+}
+
+// Triangle-specific helper API (named to make intent explicit)
+export function startTriangleDemo(params: Parameters<typeof startDemo>[0]) {
+  return startDemo(params);
+}
+
+export function stopTriangleDemo(params: Parameters<typeof stopDemo>[0]) {
+  return stopDemo(params);
+}
+
+export function nextTriangleStep(setter: React.Dispatch<React.SetStateAction<number>>) {
+  setter(prev => Math.min(prev + 1, 6 + (0)));
+}
+
+export function prevTriangleStep(setter: React.Dispatch<React.SetStateAction<number>>) {
+  setter(prev => Math.max(prev - 1, 0));
+}
+
+export function getTriangleDemoText(step: number, triSymmetry: 'cw' | 'ccw') {
+  if (step === 0) return '데모 준비 중... (다음 버튼을 눌러 시작하세요)';
+  if (step === 1) return '변형된 도형을 준비합니다.';
+  if (step >= 2 && step <= 6) {
+    const k = step - 1;
+    const angle = k * 60 * (triSymmetry === 'cw' ? 1 : -1);
+    return `기준점을 기준으로 ${angle}도 회전합니다.`;
+  }
+  const hexes = Math.max(0, step - 6);
+  if (hexes === 0) return '중앙 육각형 완성 — 다음 버튼을 눌러 주변 육각형을 하나씩 추가하세요.';
+  return `주변 육각형 #${hexes}는 밀어서 복사합니다.`;
+}
+
+export function triangleAutoAdvance(demoMode: boolean, demoStep: number, demoCentersLength: number, setDemoStep: React.Dispatch<React.SetStateAction<number>>) {
+  if (!demoMode) return;
+  if (demoStep <= 12) return;
+  if (demoCentersLength >= 13) {
+    const full = 6 + demoCentersLength;
+    if (demoStep !== full) setDemoStep(full);
+  }
+}
+
 export default function Triangle({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmetry, demoMode, demoStep, demoCenters, range = 12 }: Props) {
   const tiles: React.ReactNode[] = [];
 
@@ -209,4 +292,52 @@ export default function Triangle({ tilePathData, colorA, colorB, RADIUS, CENTER,
   }
 
   return <>{tiles}</>;
+}
+
+export function renderTriangleControls(params: {
+  ei: number;
+  points: Point[];
+  activePoint: { edgeIdx: number; pointIdx: number } | null;
+  triSymmetry: 'cw' | 'ccw';
+  handleMouseDown: (edgeIdx: number, pointIdx: number) => void;
+}) {
+  const { ei, points, activePoint, triSymmetry, handleMouseDown } = params;
+  const driven = 1;
+  const paired = triSymmetry === 'cw' ? (driven + 2) % 3 : (driven + 1) % 3;
+  const spare = [0,1,2].find(x => x !== driven && x !== paired)!;
+
+  // Only render driven, paired and spare edges in triangle mode
+  if (![driven, paired, spare].includes(ei)) return null;
+
+  return (
+    <g key={String(ei)}>
+      {points.map((p, pointIdx) => {
+        const isDriven = ei === driven;
+        const isPaired = ei === paired;
+        const isSpare = ei === spare;
+
+        let fill = isPaired ? '#f59e0b' : isDriven ? '#2563eb' : (isSpare ? (pointIdx === 0 ? '#2563eb' : '#60a5fa') : '#6366f1');
+        const interactive = !isPaired && !(isSpare && pointIdx === 1);
+        if (interactive) fill = '#2563eb';
+
+        return (
+          <motion.circle
+            key={pointIdx}
+            cx={p.x}
+            cy={p.y}
+            r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
+            initial={false}
+            animate={{ r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8, fill }}
+            className={`stroke-white stroke-[3px] shadow-lg ${
+              !interactive ? 'pointer-events-none cursor-default' :
+              activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none cursor-default' :
+              'cursor-move'
+            }`}
+            onMouseDown={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
+            onTouchStart={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
+          />
+        );
+      })}
+    </g>
+  );
 }
