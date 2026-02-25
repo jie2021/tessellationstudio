@@ -95,6 +95,7 @@ export default function App() {
   // 'ccw': edge i -> edge (i+1)%3 (60° CCW rotation around triangle center)
   const [triSymmetry, setTriSymmetry] = useState<'cw' | 'ccw'>('cw');
   const [useCurve, setUseCurve] = useState(true);
+  const [transformType, setTransformType] = useState<'rotate90' | 'translate' | 'glide'>('rotate90');
   const [demoMode, setDemoMode] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
   const demoIntervalRef = React.useRef<number | null>(null);
@@ -224,6 +225,11 @@ export default function App() {
     // Ensure editor is hidden while demo runs
     try { setShowEditor(false); } catch(e) {}
   };
+
+  // When switching to square, default the transform type to 90° rotation
+  useEffect(() => {
+    if (shapeType === 'square') setTransformType('rotate90');
+  }, [shapeType]);
 
   const stopSquareDemo = () => {
     setSquareDemoMode(false);
@@ -396,25 +402,69 @@ export default function App() {
         // Restore original behavior: when the top edge is edited, update the right
         // paired edge so the tiling remains continuous.
         if (activePoint.edgeIdx === 1) {
+          // Top edge edited
           const topIdx = 1;
-          const rightIdx = triSymmetry === 'cw' ? 0 : 2; // cw -> right(0), ccw -> left(2)
-          const tv0 = baseVertices[topIdx];
-          const tv1 = baseVertices[(topIdx + 1) % 4];
-          const tmx = (tv0.x + tv1.x) / 2;
-          const tmy = (tv0.y + tv1.y) / 2;
-          const tcp = newPaths[topIdx][0];
-          const tvx = tcp.x - tmx;
-          const tvy = tcp.y - tmy;
-          // rotate vector by +90deg to map top->right (consistent orientation)
-          const trad = Math.PI / 2;
-          const trx = Math.cos(trad) * tvx - Math.sin(trad) * tvy;
-          const try_ = Math.sin(trad) * tvx + Math.cos(trad) * tvy;
+          if (transformType === 'translate') {
+            // In translate mode, map top -> bottom (driven)
+            const tv0 = baseVertices[topIdx];
+            const tv1 = baseVertices[(topIdx + 1) % 4];
+            const tmx = (tv0.x + tv1.x) / 2;
+            const tmy = (tv0.y + tv1.y) / 2;
+            const tcp = newPaths[topIdx][0];
+            const tvx = tcp.x - tmx;
+            const tvy = tcp.y - tmy;
 
-          const rp0 = baseVertices[rightIdx];
-          const rp1 = baseVertices[(rightIdx + 1) % 4];
-          const rmx = (rp0.x + rp1.x) / 2;
-          const rmy = (rp0.y + rp1.y) / 2;
-          newPaths[rightIdx] = [{ x: rmx + trx, y: rmy + try_ }];
+            const bottomIdx = driven;
+            const bv0 = baseVertices[bottomIdx];
+            const bv1 = baseVertices[(bottomIdx + 1) % 4];
+            const bmx = (bv0.x + bv1.x) / 2;
+            const bmy = (bv0.y + bv1.y) / 2;
+            // map so bottom moves in the same direction as top
+            newPaths[bottomIdx] = [{ x: bmx + tvx, y: bmy + tvy }];
+          } else {
+            // Default behavior: map top -> right to keep tiling continuous
+            const rightIdx = triSymmetry === 'cw' ? 0 : 2; // cw -> right(0), ccw -> left(2)
+            const tv0 = baseVertices[topIdx];
+            const tv1 = baseVertices[(topIdx + 1) % 4];
+            const tmx = (tv0.x + tv1.x) / 2;
+            const tmy = (tv0.y + tv1.y) / 2;
+            const tcp = newPaths[topIdx][0];
+            const tvx = tcp.x - tmx;
+            const tvy = tcp.y - tmy;
+            // rotate vector by +90deg to map top->right (consistent orientation)
+            const trad = Math.PI / 2;
+            const trx = Math.cos(trad) * tvx - Math.sin(trad) * tvy;
+            const try_ = Math.sin(trad) * tvx + Math.cos(trad) * tvy;
+
+            const rp0 = baseVertices[rightIdx];
+            const rp1 = baseVertices[(rightIdx + 1) % 4];
+            const rmx = (rp0.x + rp1.x) / 2;
+            const rmy = (rp0.y + rp1.y) / 2;
+            newPaths[rightIdx] = [{ x: rmx + trx, y: rmy + try_ }];
+          }
+        }
+
+        // If we're in 'translate' transform mode and the user drags the right edge,
+        // map that movement to the left edge (mirror translation)
+        if (transformType === 'translate') {
+          const rightIdxForTranslate = triSymmetry === 'cw' ? 0 : 2; // visual "right"
+          const leftIdx = 2;
+          if (activePoint.edgeIdx === rightIdxForTranslate) {
+            const rp0 = baseVertices[rightIdxForTranslate];
+            const rp1 = baseVertices[(rightIdxForTranslate + 1) % 4];
+            const rmx = (rp0.x + rp1.x) / 2;
+            const rmy = (rp0.y + rp1.y) / 2;
+            const rcp = newPaths[rightIdxForTranslate][0];
+            const rvx = rcp.x - rmx;
+            const rvy = rcp.y - rmy;
+
+            const lv0 = baseVertices[leftIdx];
+            const lv1 = baseVertices[(leftIdx + 1) % 4];
+            const lmx = (lv0.x + lv1.x) / 2;
+            const lmy = (lv0.y + lv1.y) / 2;
+            // map so left moves in the same direction as right
+            newPaths[leftIdx] = [{ x: lmx + rvx, y: lmy + rvy }];
+          }
         }
 
         // When the bottom edge (driven) is edited, update the left edge midpoint
@@ -503,7 +553,7 @@ export default function App() {
       return { x: cx + rx, y: cy + ry };
     };
     for (let k = 0; k < 4; k++) {
-      const angle = k * 90;
+      const angle = transformType === 'translate' ? 0 : k * 90;
       for (const v of baseVertices) {
         const rp = rotatePoint(v, angle, pivot.x, pivot.y);
         if (rp.x < minX) minX = rp.x;
@@ -521,7 +571,7 @@ export default function App() {
     // Show the central assembly: 1..4 rotated wedges depending on step
     const n = Math.min(4, Math.max(1, squareDemoStep));
     for (let k = 0; k < n; k++) {
-      const angle = k * 90;
+      const angle = transformType === 'translate' ? 0 : k * 90;
       const wedgeFill = (k % 2 === 0) ? colorA : colorB;
       arr.push(
         <path
@@ -559,8 +609,8 @@ export default function App() {
         const tx = cx - 0; // we translate the whole assembly to (cx,cy) relative to pivot
         const ty = cy - 0;
         // For translated assemblies, preserve the 4-wedge color pattern
-        for (let k = 0; k < 4; k++) {
-          const angle = k * 90;
+          for (let k = 0; k < 4; k++) {
+          const angle = transformType === 'translate' ? 0 : k * 90;
           const wedgeFill = (k % 2 === 0) ? colorA : colorB;
           arr.push(
             <path
@@ -606,7 +656,7 @@ export default function App() {
         for (let c = -range; c < range; c++) {
           const tx = c * side - CENTER;
           const ty = r * side - CENTER;
-          const rot = ((r + c) % 4) * 90;
+          const rot = transformType === 'translate' ? 0 : ((r + c) % 4) * 90;
           tiles.push(
             <path
               key={`sq-${r}-${c}`}
@@ -923,6 +973,36 @@ export default function App() {
             </div>
           </section>
 
+          {shapeType === 'square' && (
+            <section className="space-y-4">
+              <label className="text-[11px] font-bold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
+                <RotateCcw size={14} /> 4. 변형 종류
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { id: 'rotate90', label: '90도 회전' },
+                  { id: 'translate', label: '평행 이동' },
+                  { id: 'glide', label: '미끄럼 반사' },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => setTransformType(opt.id as any)}
+                    className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all duration-200 ${
+                      transformType === opt.id
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-600 shadow-inner'
+                        : 'border-neutral-100 bg-neutral-50 text-neutral-400 hover:border-neutral-200'
+                    }`}
+                  >
+                    <span className="text-[11px] font-black tracking-tight">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-neutral-400 leading-relaxed bg-neutral-50 rounded-xl p-3 border border-neutral-100">
+                90도 회전 선택 시 현재 테셀레이션에 적용된 회전이 선택됩니다. 평행 이동과 미끄럼 반사는 추후에 조절점 변경 방식으로 지원됩니다.
+              </p>
+            </section>
+          )}
+
           {shapeType === 'triangle' && (
             <section className="space-y-4">
               <label className="text-[11px] font-bold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
@@ -955,7 +1035,7 @@ export default function App() {
 
           <section className="space-y-4">
             <label className="text-[11px] font-bold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
-              <Info size={14} /> {shapeType === 'triangle' ? '5' : '4'}. 사용 방법
+              <Info size={14} /> {shapeType === 'triangle' || shapeType === 'square' ? '5' : '4'}. 사용 방법
             </label>
             <div className="bg-neutral-50 p-5 rounded-2xl border border-neutral-100 space-y-3">
               <div className="flex gap-3">
@@ -964,7 +1044,9 @@ export default function App() {
               </div>
               <div className="flex gap-3">
                 <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">2</div>
-                <p className="text-xs text-neutral-600 leading-relaxed">변형된 모양이 배경에 실시간으로 반복됩니다.</p>
+                <p className="text-xs text-neutral-600 leading-relaxed">
+                  {transformType === 'translate' ? '선택한 "평행 이동" 모드에서는 회전 과정을 생략하고 평행 이동(translation)만으로 타일을 배치합니다 — 타일이 서로 회전하지 않고 평행 이동으로 복사됩니다.' : '변형된 모양이 배경에 실시간으로 반복됩니다.'}
+                </p>
               </div>
               <div className="flex gap-3">
                 <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">3</div>
@@ -1161,17 +1243,29 @@ export default function App() {
                       const driven = 3; // bottom edge
                       const paired = triSymmetry === 'cw' ? (driven + 1) % 4 : (driven + 3) % 4; // cw -> right(0), ccw -> left(2)
                       const leftIdx = 2;
+                      const topIdx = 1;
+                      const rightIdx = triSymmetry === 'cw' ? 0 : 2;
                       return (
                         <g key={edgeIdx}>
                           {(points as Point[]).map((p, pointIdx) => {
                             const isDriven = ei === driven;
                             const isPaired = ei === paired;
                             const isLeft = ei === leftIdx;
-                            // left edge is always orange and non-interactive
-                            let fill = isLeft ? '#f59e0b' : isPaired ? '#f59e0b' : isDriven ? '#2563eb' : '#6366f1';
+                            // Determine interactivity and fill color.
                             let interactive = !isPaired && !(activePoint && activePoint.edgeIdx !== ei);
-                            if (isLeft) interactive = false;
-                            if (interactive) fill = '#2563eb';
+
+                            // If translate mode is active, only allow top and right edges to be interactive
+                            if (transformType === 'translate') {
+                              interactive = (ei === topIdx || ei === rightIdx) && !(activePoint && activePoint.edgeIdx !== ei);
+                            }
+
+                            // Fill color rules: interactive -> blue; non-interactive left/bottom/paired -> orange; fallback gray
+                            let fill = '#6366f1';
+                            if (interactive) {
+                              fill = '#2563eb';
+                            } else if (ei === leftIdx || ei === driven || isPaired) {
+                              fill = '#f59e0b';
+                            }
 
                             return (
                               <motion.circle
