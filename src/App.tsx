@@ -428,6 +428,30 @@ export default function App() {
             const bmy = (bv0.y + bv1.y) / 2;
             // map so bottom moves in the same direction as top
             newPaths[bottomIdx] = [{ x: bmx + tvx, y: bmy + tvy }];
+          } else if (transformType === 'glide') {
+            // In glide (미끄럼 반사) mode:
+            // 1) reflect the edited top control across the square guideline center (centroid)
+            // 2) then reflect that point across the driven edge line (bottom edge) to produce the partner
+            const tcp = newPaths[topIdx][0];
+            const bottomIdx = driven;
+            const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
+            const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
+            const mirrored = { x: 2 * guideCx - tcp.x, y: 2 * guideCy - tcp.y };
+
+            // bottom edge endpoints
+            const bv0 = baseVertices[bottomIdx];
+            const bv1 = baseVertices[(bottomIdx + 1) % 4];
+            const ax = bv0.x, ay = bv0.y;
+            const bx = bv1.x, by = bv1.y;
+            const abx = bx - ax, aby = by - ay;
+            const abLen2 = (abx * abx + aby * aby) || 1;
+            const apx = mirrored.x - ax, apy = mirrored.y - ay;
+            const t = (apx * abx + apy * aby) / abLen2;
+            const projx = ax + t * abx;
+            const projy = ay + t * aby;
+            const reflectX = 2 * projx - mirrored.x;
+            const reflectY = 2 * projy - mirrored.y;
+            newPaths[bottomIdx] = [{ x: reflectX, y: reflectY }];
           } else {
             // Default behavior: map top -> right to keep tiling continuous
             const rightIdx = triSymmetry === 'cw' ? 0 : 2; // cw -> right(0), ccw -> left(2)
@@ -451,12 +475,11 @@ export default function App() {
           }
         }
 
-        // If we're in 'translate' transform mode and the user drags the right edge,
-        // map that movement to the left edge (mirror translation)
-        if (transformType === 'translate') {
-          const rightIdxForTranslate = triSymmetry === 'cw' ? 0 : 2; // visual "right"
-          const leftIdx = 2;
-          if (activePoint.edgeIdx === rightIdxForTranslate) {
+        // If the user drags the right edge, handle according to transformType
+        const rightIdxForTranslate = triSymmetry === 'cw' ? 0 : 2; // visual "right"
+        const leftIdx = 2;
+        if (activePoint.edgeIdx === rightIdxForTranslate) {
+          if (transformType === 'translate') {
             const rp0 = baseVertices[rightIdxForTranslate];
             const rp1 = baseVertices[(rightIdxForTranslate + 1) % 4];
             const rmx = (rp0.x + rp1.x) / 2;
@@ -471,6 +494,27 @@ export default function App() {
             const lmy = (lv0.y + lv1.y) / 2;
             // map so left moves in the same direction as right
             newPaths[leftIdx] = [{ x: lmx + rvx, y: lmy + rvy }];
+          } else if (transformType === 'glide') {
+            // Glide mode: reflect the right control across the square guideline center,
+            // then across the left edge line to produce the partner
+            const rcp = newPaths[rightIdxForTranslate][0];
+            const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
+            const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
+            const mirrored = { x: 2 * guideCx - rcp.x, y: 2 * guideCy - rcp.y };
+
+            const lv0 = baseVertices[leftIdx];
+            const lv1 = baseVertices[(leftIdx + 1) % 4];
+            const ax = lv0.x, ay = lv0.y;
+            const bx = lv1.x, by = lv1.y;
+            const abx = bx - ax, aby = by - ay;
+            const abLen2 = (abx * abx + aby * aby) || 1;
+            const apx = mirrored.x - ax, apy = mirrored.y - ay;
+            const t = (apx * abx + apy * aby) / abLen2;
+            const projx = ax + t * abx;
+            const projy = ay + t * aby;
+            const reflectX = 2 * projx - mirrored.x;
+            const reflectY = 2 * projy - mirrored.y;
+            newPaths[leftIdx] = [{ x: reflectX, y: reflectY }];
           }
         }
 
@@ -1292,8 +1336,8 @@ export default function App() {
                             // Determine interactivity and fill color.
                             let interactive = !isPaired && !(activePoint && activePoint.edgeIdx !== ei);
 
-                            // If translate mode is active, only allow top and right edges to be interactive
-                            if (transformType === 'translate') {
+                            // If translate or glide mode is active, only allow top and right edges to be interactive
+                            if (transformType === 'translate' || transformType === 'glide') {
                               interactive = (ei === topIdx || ei === rightIdx) && !(activePoint && activePoint.edgeIdx !== ei);
                             }
 
