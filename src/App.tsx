@@ -264,17 +264,17 @@ export default function App() {
     if (step <= 0) return '데모 준비 중... (다음 버튼을 눌러 시작하세요)';
     if (transformType === 'translate') {
       if (step === 1) return '기본 도형을 표시합니다.';
-      if (step >= 2 && step <= 4) return `기준점을 기준으로 동일한 도형을 평행이동으로 복사합니다 (스텝 ${step - 1}).`;
-      const add = Math.max(0, step - 4);
-      return `주변을 평행이동으로 채웁니다 — 추가 패치 #${add}`;
+      // if (step >= 2 && step <= 4) return `기준점을 기준으로 동일한 도형을 평행이동으로 복사합니다 (스텝 ${step - 1}).`;
+      // const add = Math.max(0, step - 4);
+      return `주변을 평행이동으로 채웁니다 — #${step}`;
     }
 
     if (step === 1) return '기본 도형을 표시합니다.';
-    if (step === 2) return '오른쪽 하단 꼭지점을 기준으로 90도 회전합니다.';
+    if (step === 2) return '왼쪽 위 꼭지점을 기준으로 90도 회전합니다.';
     if (step === 3) return '같은 기준점에서 180도 회전합니다.';
     if (step === 4) return '같은 기준점에서 270도 회전합니다.';
     const add = step - 4;
-    return `주변을 평행이동으로 채웁니다 — 추가 패치 #${add}`;
+    return `주변을 평행이동으로 채웁니다 — #${add}`;
   };
 
   const handleMouseDown = (edgeIdx: number, pointIdx: number) => {
@@ -359,13 +359,15 @@ export default function App() {
   const squareDemoTiles = useMemo(() => {
     if (!squareDemoMode || shapeType !== 'square') return null;
     if (!baseVertices || baseVertices.length === 0) return null;
-    // pivot = bottom-right vertex (max x+y)
+    // pivot = top-left vertex (min x+y) — use for demo clarity per request
     let pivot = baseVertices[0];
     for (const v of baseVertices) {
-      if (v.x + v.y > pivot.x + pivot.y) pivot = v;
+      if (v.x + v.y < pivot.x + pivot.y) pivot = v;
     }
 
-    // Compute bounding box of the assembled 4-rotation patch to determine translation grid
+    // Compute bounding box used to determine translation grid.
+    // For `translate` mode we only need the base tile (no 4-rotation assembly),
+    // otherwise compute bounding box of the 4-rotation patch.
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     const rotatePoint = (p: { x: number; y: number }, angleDeg: number, cx: number, cy: number) => {
       const a = (angleDeg * Math.PI) / 180;
@@ -375,14 +377,25 @@ export default function App() {
       const ry = Math.sin(a) * dx + Math.cos(a) * dy;
       return { x: cx + rx, y: cy + ry };
     };
-    for (let k = 0; k < 4; k++) {
-      const angle = transformType === 'translate' ? 0 : k * 90;
+
+    if (transformType === 'translate') {
+      // Use just the base tile's vertices for bounding box
       for (const v of baseVertices) {
-        const rp = rotatePoint(v, angle, pivot.x, pivot.y);
-        if (rp.x < minX) minX = rp.x;
-        if (rp.y < minY) minY = rp.y;
-        if (rp.x > maxX) maxX = rp.x;
-        if (rp.y > maxY) maxY = rp.y;
+        if (v.x < minX) minX = v.x;
+        if (v.y < minY) minY = v.y;
+        if (v.x > maxX) maxX = v.x;
+        if (v.y > maxY) maxY = v.y;
+      }
+    } else {
+      for (let k = 0; k < 4; k++) {
+        const angle = k * 90;
+        for (const v of baseVertices) {
+          const rp = rotatePoint(v, angle, pivot.x, pivot.y);
+          if (rp.x < minX) minX = rp.x;
+          if (rp.y < minY) minY = rp.y;
+          if (rp.x > maxX) maxX = rp.x;
+          if (rp.y > maxY) maxY = rp.y;
+        }
       }
     }
 
@@ -391,33 +404,68 @@ export default function App() {
 
     const arr: React.ReactNode[] = [];
 
-    // Show the central assembly: for rotate mode reveal 1..4 rotated wedges;
-    // for translate mode show only a single tile (no 4-piece assembly).
-    const n = transformType === 'translate' ? 1 : Math.min(4, Math.max(1, squareDemoStep));
-    for (let k = 0; k < n; k++) {
-      const angle = transformType === 'translate' ? 0 : k * 90;
-      const wedgeFill = (k % 2 === 0) ? colorA : colorB;
-      arr.push(
-        <path
-          key={`sqdemo-center-${k}`}
-          d={tilePathData}
-          transform={`rotate(${angle}, ${pivot.x}, ${pivot.y})`}
-          fill={wedgeFill}
-          fillOpacity={1}
-          stroke="#000"
-          strokeWidth={0.5}
-        />
-      );
+    // Show the central assembly:
+    // - rotate mode: reveal 1..4 rotated wedges around pivot
+    // - translate mode: reveal a 4-piece "patch" built from the base tile
+    //   where steps map as:
+    //     step 1: base
+    //     step 2: base + up (0, -height)
+    //     step 3: base + up + up+left (-width, -height)
+    //     step 4: base + left (-width, 0)
+    if (transformType === 'translate') {
+      const offsets: {dx:number, dy:number, fill:string}[] = [];
+      // base
+      offsets.push({ dx: 0, dy: 0, fill: colorA });
+      if (squareDemoStep >= 2) offsets.push({ dx: 0, dy: -height, fill: colorB });
+      if (squareDemoStep >= 3) offsets.push({ dx: -width, dy: -height, fill: colorA });
+      if (squareDemoStep >= 4) offsets.push({ dx: -width, dy: 0, fill: colorB });
+
+      for (let i = 0; i < offsets.length; i++) {
+        const { dx, dy, fill } = offsets[i];
+        arr.push(
+          <path
+            key={`sqdemo-center-patch-${i}`}
+            d={tilePathData}
+            transform={`translate(${dx}, ${dy}) rotate(0, ${pivot.x}, ${pivot.y})`}
+            fill={fill}
+            fillOpacity={1}
+            stroke="#000"
+            strokeWidth={0.5}
+          />
+        );
+      }
+    } else {
+      const n = Math.min(4, Math.max(1, squareDemoStep));
+      for (let k = 0; k < n; k++) {
+        const angle = k * 90;
+        const wedgeFill = (k % 2 === 0) ? colorA : colorB;
+        arr.push(
+          <path
+            key={`sqdemo-center-${k}`}
+            d={tilePathData}
+            transform={`rotate(${angle}, ${pivot.x}, ${pivot.y})`}
+            fill={wedgeFill}
+            fillOpacity={1}
+            stroke="#000"
+            strokeWidth={0.5}
+          />
+        );
+      }
     }
 
     // If step > 4, reveal translated assemblies one by one
     if (squareDemoStep > 4) {
       const range = 4; // grid radius for revealed assemblies
       const centers: {cx:number, cy:number}[] = [];
+      // When in translate mode, revealed assemblies should jump two cells
+      // per reveal. Use doubled spacing for translate mode so step 5+ moves
+      // by two tile widths/heights each reveal.
+      const spacingX = transformType === 'translate' ? width * 2 : width;
+      const spacingY = transformType === 'translate' ? height * 2 : height;
       for (let r = -range; r <= range; r++) {
         for (let c = -range; c <= range; c++) {
-          const cx = c * width;
-          const cy = r * height;
+          const cx = c * spacingX;
+          const cy = r * spacingY;
           // skip central (0,0) — already shown
           if (Math.abs(cx) < 1e-6 && Math.abs(cy) < 1e-6) continue;
           centers.push({ cx, cy });
@@ -434,17 +482,28 @@ export default function App() {
         const ty = cy - 0;
         // For translated assemblies: in translate mode place a single tile; in rotate mode place 4 rotated wedges
         if (transformType === 'translate') {
-          arr.push(
-            <path
-              key={`sqdemo-${i}-0`}
-              d={tilePathData}
-              transform={`translate(${tx}, ${ty}) rotate(0, ${pivot.x}, ${pivot.y})`}
-              fill={i % 2 === 0 ? colorA : colorB}
-              fillOpacity={1}
-              stroke="#000"
-              strokeWidth={0.5}
-            />
-          );
+          // Place the whole 1..4 patch at each revealed center
+          const patchOffsets: {dx:number, dy:number, fill:string}[] = [];
+          patchOffsets.push({ dx: 0, dy: 0, fill: colorA });
+          patchOffsets.push({ dx: 0, dy: -height, fill: colorB });
+          patchOffsets.push({ dx: -width, dy: -height, fill: colorA });
+          patchOffsets.push({ dx: -width, dy: 0, fill: colorB });
+          // Only include offsets up to the central patch's current completeness
+          const includeCount = Math.min(patchOffsets.length, Math.max(1, squareDemoStep));
+          for (let j = 0; j < includeCount; j++) {
+            const off = patchOffsets[j];
+            arr.push(
+              <path
+                key={`sqdemo-${i}-patch-${j}`}
+                d={tilePathData}
+                transform={`translate(${tx + off.dx}, ${ty + off.dy}) rotate(0, ${pivot.x}, ${pivot.y})`}
+                fill={off.fill}
+                fillOpacity={1}
+                stroke="#000"
+                strokeWidth={0.5}
+              />
+            );
+          }
         } else {
           for (let k = 0; k < 4; k++) {
             const angle = k * 90;
@@ -495,6 +554,8 @@ export default function App() {
       let stepX = defaultSide;
       let stepY = defaultSide;
       if (transformType === 'translate') {
+        // Use the base tile bounding box for translation steps so translated
+        // placements align with the base piece size (no rotation assembly).
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         for (const v of baseVertices) {
           if (v.x < minX) minX = v.x;
@@ -948,7 +1009,7 @@ export default function App() {
               <div className="flex gap-3">
                 <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">2</div>
                 <p className="text-xs text-neutral-600 leading-relaxed">
-                  {transformType === 'translate' ? '선택한 "평행 이동" 모드에서는 회전 과정을 생략하고 평행 이동(translation)만으로 타일을 배치합니다 — 타일이 서로 회전하지 않고 평행 이동으로 복사됩니다.' : '변형된 모양이 배경에 실시간으로 반복됩니다.'}
+                  변형된 모양이 배경에 실시간으로 반복됩니다.
                 </p>
               </div>
               <div className="flex gap-3">
