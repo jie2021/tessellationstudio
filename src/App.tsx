@@ -13,9 +13,9 @@ import {
   Grid3X3
 } from 'lucide-react';
 
-import Rectangle from './Rectangle';
+import Rectangle, { applySquareEdit, Point as RectPoint } from './Rectangle';
 import HexagonShape from './Hexagon';
-import TriangleShape from './Triangle';
+import TriangleShape, { initTrianglePaths, applyTriangleEdit, Point as TriPoint } from './Triangle';
 
 // --- Types ---
 
@@ -124,59 +124,22 @@ export default function App() {
   const currentEdgePaths = useMemo(() => {
     const paths: Record<number, Point[]> = { ...edgePaths };
     const numEdges = shapeType === 'square' ? 4 : shapeType === 'hexagon' ? 6 : 3;
-    
-    // For triangle mode, we want the driven (bottom) edge to remain a single
-    // midpoint control, while the "spare" side (left or right depending on
-    // triSymmetry) is split into two symmetric control points around its
-    // midpoint. The paired edge (the one that was previously driven by the
-    // bottom edge) remains a single control and will be updated when the
-    // bottom edge is edited.
+
+    // Delegate triangle initialization to helper when appropriate
+    if (shapeType === 'triangle') {
+      const tri = initTrianglePaths(baseVertices as TriPoint[], RADIUS, triSymmetry);
+      for (let i = 0; i < numEdges; i++) {
+        if (!paths[i]) paths[i] = tri[i];
+      }
+      return paths;
+    }
+
+    // Default: one midpoint for non-triangle shapes
     for (let i = 0; i < numEdges; i++) {
       if (!paths[i]) {
         const v1 = baseVertices[i];
         const v2 = baseVertices[(i + 1) % numEdges];
-
-        if (shapeType === 'triangle') {
-          const driven = 1; // bottom edge
-          const paired = triSymmetry === 'cw' ? (driven + 2) % 3 : (driven + 1) % 3;
-          const spare = [0,1,2].find(x => x !== driven && x !== paired)!;
-
-          const mx = (v1.x + v2.x) / 2;
-          const my = (v1.y + v2.y) / 2;
-
-          // helper: build a symmetric pair around an edge midpoint
-          const makeSymmetric = (a: Point, b: Point) => {
-            const mmx = (a.x + b.x) / 2;
-            const mmy = (a.y + b.y) / 2;
-            const ex = b.x - a.x;
-            const ey = b.y - a.y;
-            const len = Math.sqrt(ex * ex + ey * ey) || 1;
-            const nx = -ey / len;
-            const ny = ex / len;
-            const offset = Math.max(30, RADIUS * 0.12);
-            return [
-              { x: mmx + nx * offset, y: mmy + ny * offset },
-              { x: mmx - nx * offset, y: mmy - ny * offset },
-            ];
-          };
-
-          if (i === driven) {
-            // bottom edge stays a single midpoint control
-            paths[i] = [{ x: mx, y: my }];
-          } else if (i === spare) {
-            // spare edge: two symmetric controls
-            paths[i] = makeSymmetric(v1, v2);
-          } else {
-            // paired edge: single midpoint (will be driven by bottom edits)
-            paths[i] = [{ x: mx, y: my }];
-          }
-
-        } else {
-          // Default: one midpoint for non-triangle shapes
-          paths[i] = [
-            { x: (v1.x + v2.x) / 2, y: (v1.y + v2.y) / 2 }
-          ];
-        }
+        paths[i] = [ { x: (v1.x + v2.x) / 2, y: (v1.y + v2.y) / 2 } ];
       }
     }
     return paths;
@@ -344,214 +307,16 @@ export default function App() {
       points[activePoint.pointIdx] = { x, y };
       newPaths[activePoint.edgeIdx] = points;
 
-      // Triangle-specific behavior:
-      // - driven (bottom) edge index = 1. When the driven edge is edited,
-      //   update the paired edge using the original rotation-based mapping.
-      // - the spare edge (left or right depending on triSymmetry) is split
-      //   into two symmetric controls around its midpoint; moving one of them
-      //   mirrors the other across the midpoint. Spare edits must NOT change
-      //   the driven/paired mapping.
+      // Delegate triangle-specific edit behavior
       if (shapeType === 'triangle') {
-        const driven = 1;
-        const paired = triSymmetry === 'cw' ? (driven + 2) % 3 : (driven + 1) % 3;
-        const spare = [0,1,2].find(x => x !== driven && x !== paired)!;
-
-        // If editing the driven edge (bottom), update the paired edge accordingly
-        if (activePoint.edgeIdx === driven) {
-          const v0 = baseVertices[driven];
-          const v1 = baseVertices[(driven + 1) % 3];
-          const pv0 = baseVertices[paired];
-          const pv1 = baseVertices[(paired + 1) % 3];
-
-          const drivenPts = newPaths[driven];
-          const pairedPts = drivenPts.map((_p, idx) => {
-            const cp = drivenPts[idx];
-            const edgeLen2 = (v1.x - v0.x) ** 2 + (v1.y - v0.y) ** 2;
-            const t = edgeLen2 > 0
-              ? ((cp.x - v0.x) * (v1.x - v0.x) + (cp.y - v0.y) * (v1.y - v0.y)) / edgeLen2
-              : 0.5;
-            const ex = v1.x - v0.x, ey = v1.y - v0.y;
-            const len = Math.sqrt(edgeLen2) || 1;
-            const nx = -ey / len, ny = ex / len;
-            const d = (cp.x - v0.x) * nx + (cp.y - v0.y) * ny;
-
-            const tPaired = 1 - t;
-            const baseX = pv0.x + tPaired * (pv1.x - pv0.x);
-            const baseY = pv0.y + tPaired * (pv1.y - pv0.y);
-            const pex = pv1.x - pv0.x, pey = pv1.y - pv0.y;
-            const plen = Math.sqrt(pex ** 2 + pey ** 2) || 1;
-            const pnx = -pey / plen, pny = pex / plen;
-            return {
-              x: baseX + (-d) * pnx,
-              y: baseY + (-d) * pny,
-            };
-          });
-          newPaths[paired] = pairedPts;
-        }
-
-        // If editing the spare edge, mirror within that edge only.
-        if (activePoint.edgeIdx === spare) {
-          const pts = newPaths[spare];
-          if (pts && pts.length >= 2) {
-            const v0 = baseVertices[spare];
-            const v1 = baseVertices[(spare + 1) % 3];
-            const mx = (v0.x + v1.x) / 2;
-            const my = (v0.y + v1.y) / 2;
-            const movedIdx = activePoint.pointIdx;
-            const otherIdx = movedIdx === 0 ? 1 : 0;
-            pts[otherIdx] = { x: 2 * mx - pts[movedIdx].x, y: 2 * my - pts[movedIdx].y };
-            newPaths[spare] = pts;
-          }
-        }
+        // applyTriangleEdit will return a newPaths object with any triangle-specific
+        // paired/mirror updates applied.
+        return applyTriangleEdit(newPaths, activePoint, baseVertices as TriPoint[], triSymmetry);
       }
 
-      // Square-specific behavior:
+      // Delegate square-specific edit behavior
       if (shapeType === 'square') {
-        // Define driven (bottom) edge and paired edge mapping depending on triSymmetry
-        // Edge indices (with startAngle -PI/4): 0=right,1=top,2=left,3=bottom
-        const driven = 3; // bottom edge
-        const paired = triSymmetry === 'cw' ? (driven + 1) % 4 : (driven + 3) % 4; // cw -> right(0), ccw -> left(2)
-
-        // (Bottom-driven -> paired mapping removed per user request)
-        // Restore original behavior: when the top edge is edited, update the right
-        // paired edge so the tiling remains continuous.
-        if (activePoint.edgeIdx === 1) {
-          // Top edge edited
-          const topIdx = 1;
-          if (transformType === 'translate') {
-            // In translate mode, map top -> bottom (driven)
-            const tv0 = baseVertices[topIdx];
-            const tv1 = baseVertices[(topIdx + 1) % 4];
-            const tmx = (tv0.x + tv1.x) / 2;
-            const tmy = (tv0.y + tv1.y) / 2;
-            const tcp = newPaths[topIdx][0];
-            const tvx = tcp.x - tmx;
-            const tvy = tcp.y - tmy;
-
-            const bottomIdx = driven;
-            const bv0 = baseVertices[bottomIdx];
-            const bv1 = baseVertices[(bottomIdx + 1) % 4];
-            const bmx = (bv0.x + bv1.x) / 2;
-            const bmy = (bv0.y + bv1.y) / 2;
-            // map so bottom moves in the same direction as top
-            newPaths[bottomIdx] = [{ x: bmx + tvx, y: bmy + tvy }];
-          } else if (transformType === 'glide') {
-            // In glide (미끄럼 반사) mode:
-            // 1) reflect the edited top control across the square guideline center (centroid)
-            // 2) then reflect that point across the driven edge line (bottom edge) to produce the partner
-            const tcp = newPaths[topIdx][0];
-            const bottomIdx = driven;
-            const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
-            const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
-            const mirrored = { x: 2 * guideCx - tcp.x, y: 2 * guideCy - tcp.y };
-
-            // bottom edge endpoints
-            const bv0 = baseVertices[bottomIdx];
-            const bv1 = baseVertices[(bottomIdx + 1) % 4];
-            const ax = bv0.x, ay = bv0.y;
-            const bx = bv1.x, by = bv1.y;
-            const abx = bx - ax, aby = by - ay;
-            const abLen2 = (abx * abx + aby * aby) || 1;
-            const apx = mirrored.x - ax, apy = mirrored.y - ay;
-            const t = (apx * abx + apy * aby) / abLen2;
-            const projx = ax + t * abx;
-            const projy = ay + t * aby;
-            const reflectX = 2 * projx - mirrored.x;
-            const reflectY = 2 * projy - mirrored.y;
-            newPaths[bottomIdx] = [{ x: reflectX, y: reflectY }];
-          } else {
-            // Default behavior: map top -> right to keep tiling continuous
-            const rightIdx = triSymmetry === 'cw' ? 0 : 2; // cw -> right(0), ccw -> left(2)
-            const tv0 = baseVertices[topIdx];
-            const tv1 = baseVertices[(topIdx + 1) % 4];
-            const tmx = (tv0.x + tv1.x) / 2;
-            const tmy = (tv0.y + tv1.y) / 2;
-            const tcp = newPaths[topIdx][0];
-            const tvx = tcp.x - tmx;
-            const tvy = tcp.y - tmy;
-            // rotate vector by +90deg to map top->right (consistent orientation)
-            const trad = Math.PI / 2;
-            const trx = Math.cos(trad) * tvx - Math.sin(trad) * tvy;
-            const try_ = Math.sin(trad) * tvx + Math.cos(trad) * tvy;
-
-            const rp0 = baseVertices[rightIdx];
-            const rp1 = baseVertices[(rightIdx + 1) % 4];
-            const rmx = (rp0.x + rp1.x) / 2;
-            const rmy = (rp0.y + rp1.y) / 2;
-            newPaths[rightIdx] = [{ x: rmx + trx, y: rmy + try_ }];
-          }
-        }
-
-        // If the user drags the right edge, handle according to transformType
-        const rightIdxForTranslate = triSymmetry === 'cw' ? 0 : 2; // visual "right"
-        const leftIdx = 2;
-        if (activePoint.edgeIdx === rightIdxForTranslate) {
-          if (transformType === 'translate') {
-            const rp0 = baseVertices[rightIdxForTranslate];
-            const rp1 = baseVertices[(rightIdxForTranslate + 1) % 4];
-            const rmx = (rp0.x + rp1.x) / 2;
-            const rmy = (rp0.y + rp1.y) / 2;
-            const rcp = newPaths[rightIdxForTranslate][0];
-            const rvx = rcp.x - rmx;
-            const rvy = rcp.y - rmy;
-
-            const lv0 = baseVertices[leftIdx];
-            const lv1 = baseVertices[(leftIdx + 1) % 4];
-            const lmx = (lv0.x + lv1.x) / 2;
-            const lmy = (lv0.y + lv1.y) / 2;
-            // map so left moves in the same direction as right
-            newPaths[leftIdx] = [{ x: lmx + rvx, y: lmy + rvy }];
-          } else if (transformType === 'glide') {
-            // Glide mode: reflect the right control across the square guideline center,
-            // then across the left edge line to produce the partner
-            const rcp = newPaths[rightIdxForTranslate][0];
-            const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
-            const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
-            const mirrored = { x: 2 * guideCx - rcp.x, y: 2 * guideCy - rcp.y };
-
-            const lv0 = baseVertices[leftIdx];
-            const lv1 = baseVertices[(leftIdx + 1) % 4];
-            const ax = lv0.x, ay = lv0.y;
-            const bx = lv1.x, by = lv1.y;
-            const abx = bx - ax, aby = by - ay;
-            const abLen2 = (abx * abx + aby * aby) || 1;
-            const apx = mirrored.x - ax, apy = mirrored.y - ay;
-            const t = (apx * abx + apy * aby) / abLen2;
-            const projx = ax + t * abx;
-            const projy = ay + t * aby;
-            const reflectX = 2 * projx - mirrored.x;
-            const reflectY = 2 * projy - mirrored.y;
-            newPaths[leftIdx] = [{ x: reflectX, y: reflectY }];
-          }
-        }
-
-        // When the bottom edge (driven) is edited, update the left edge midpoint
-        // so the tiling remains continuous. Bottom edge index = 3, left = 2.
-        if (activePoint.edgeIdx === driven) {
-          const leftIdx = 2;
-          const bv0 = baseVertices[driven];
-          const bv1 = baseVertices[(driven + 1) % 4];
-          const bmx = (bv0.x + bv1.x) / 2;
-          const bmy = (bv0.y + bv1.y) / 2;
-          const drivenPts = newPaths[driven];
-          if (drivenPts && drivenPts.length > 0) {
-            let cp = drivenPts[0];
-            if (drivenPts.length >= 2) cp = { x: (drivenPts[0].x + drivenPts[1].x) / 2, y: (drivenPts[0].y + drivenPts[1].y) / 2 };
-            const dvx = cp.x - bmx;
-            const dvy = cp.y - bmy;
-            const ang = Math.PI / 2;
-            const lx = Math.cos(ang) * dvx - Math.sin(ang) * dvy;
-            const ly = Math.sin(ang) * dvx + Math.cos(ang) * dvy;
-            const lv0 = baseVertices[leftIdx];
-            const lv1 = baseVertices[(leftIdx + 1) % 4];
-            const lmx = (lv0.x + lv1.x) / 2;
-            const lmy = (lv0.y + lv1.y) / 2;
-            newPaths[leftIdx] = [{ x: lmx + lx, y: lmy + ly }];
-          }
-        }
-
-        // Ensure top edge (index 1) remains a midpoint-based control (do not split)
-        // No extra handling needed here because initialization uses midpoints for squares
+        return applySquareEdit(newPaths, activePoint, baseVertices as RectPoint[], triSymmetry, transformType, CENTER);
       }
 
       return newPaths;
@@ -1395,6 +1160,11 @@ export default function App() {
                             // If translate or glide mode is active, only allow top and right edges to be interactive
                             if (transformType === 'translate' || transformType === 'glide') {
                               interactive = (ei === topIdx || ei === rightIdx) && !(activePoint && activePoint.edgeIdx !== ei);
+                            }
+
+                            // In 90° rotation mode, left edge should NOT be interactive
+                            if (transformType === 'rotate90' && ei === leftIdx) {
+                              interactive = false;
                             }
 
                             // Fill color rules: interactive -> blue; non-interactive left/bottom/paired -> orange; fallback gray

@@ -15,6 +15,102 @@ interface Props {
   range?: number;
 }
 
+export type Point = { x: number; y: number };
+
+export function initTrianglePaths(baseVertices: Point[], RADIUS: number, triSymmetry: 'cw' | 'ccw') {
+  const paths: Record<number, Point[]> = {};
+  const driven = 1; // bottom edge
+  const paired = triSymmetry === 'cw' ? (driven + 2) % 3 : (driven + 1) % 3;
+  const spare = [0,1,2].find(x => x !== driven && x !== paired)!;
+
+  const makeSymmetric = (a: Point, b: Point) => {
+    const mmx = (a.x + b.x) / 2;
+    const mmy = (a.y + b.y) / 2;
+    const ex = b.x - a.x;
+    const ey = b.y - a.y;
+    const len = Math.sqrt(ex * ex + ey * ey) || 1;
+    const nx = -ey / len;
+    const ny = ex / len;
+    const offset = Math.max(30, RADIUS * 0.12);
+    return [
+      { x: mmx + nx * offset, y: mmy + ny * offset },
+      { x: mmx - nx * offset, y: mmy - ny * offset },
+    ];
+  };
+
+  for (let i = 0; i < 3; i++) {
+    const v1 = baseVertices[i];
+    const v2 = baseVertices[(i + 1) % 3];
+    const mx = (v1.x + v2.x) / 2;
+    const my = (v1.y + v2.y) / 2;
+    if (i === driven) {
+      paths[i] = [{ x: mx, y: my }];
+    } else if (i === spare) {
+      paths[i] = makeSymmetric(v1, v2);
+    } else {
+      paths[i] = [{ x: mx, y: my }];
+    }
+  }
+  return paths;
+}
+
+export function applyTriangleEdit(newPaths: Record<number, Point[]>, activePoint: { edgeIdx: number; pointIdx: number } | null, baseVertices: Point[], triSymmetry: 'cw' | 'ccw') {
+  if (!activePoint) return newPaths;
+  const driven = 1;
+  const paired = triSymmetry === 'cw' ? (driven + 2) % 3 : (driven + 1) % 3;
+  const spare = [0,1,2].find(x => x !== driven && x !== paired)!;
+
+  // If editing the driven edge (bottom), update the paired edge accordingly
+  if (activePoint.edgeIdx === driven) {
+    const v0 = baseVertices[driven];
+    const v1 = baseVertices[(driven + 1) % 3];
+    const pv0 = baseVertices[paired];
+    const pv1 = baseVertices[(paired + 1) % 3];
+
+    const drivenPts = newPaths[driven];
+    const pairedPts = drivenPts.map((_p, idx) => {
+      const cp = drivenPts[idx];
+      const edgeLen2 = (v1.x - v0.x) ** 2 + (v1.y - v0.y) ** 2;
+      const t = edgeLen2 > 0
+        ? ((cp.x - v0.x) * (v1.x - v0.x) + (cp.y - v0.y) * (v1.y - v0.y)) / edgeLen2
+        : 0.5;
+      const ex = v1.x - v0.x, ey = v1.y - v0.y;
+      const len = Math.sqrt(edgeLen2) || 1;
+      const nx = -ey / len, ny = ex / len;
+      const d = (cp.x - v0.x) * nx + (cp.y - v0.y) * ny;
+
+      const tPaired = 1 - t;
+      const baseX = pv0.x + tPaired * (pv1.x - pv0.x);
+      const baseY = pv0.y + tPaired * (pv1.y - pv0.y);
+      const pex = pv1.x - pv0.x, pey = pv1.y - pv0.y;
+      const plen = Math.sqrt(pex ** 2 + pey ** 2) || 1;
+      const pnx = -pey / plen, pny = pex / plen;
+      return {
+        x: baseX + (-d) * pnx,
+        y: baseY + (-d) * pny,
+      };
+    });
+    newPaths[paired] = pairedPts;
+  }
+
+  // If editing the spare edge, mirror within that edge only.
+  if (activePoint.edgeIdx === spare) {
+    const pts = newPaths[spare];
+    if (pts && pts.length >= 2) {
+      const v0 = baseVertices[spare];
+      const v1 = baseVertices[(spare + 1) % 3];
+      const mx = (v0.x + v1.x) / 2;
+      const my = (v0.y + v1.y) / 2;
+      const movedIdx = activePoint.pointIdx;
+      const otherIdx = movedIdx === 0 ? 1 : 0;
+      pts[otherIdx] = { x: 2 * mx - pts[movedIdx].x, y: 2 * my - pts[movedIdx].y };
+      newPaths[spare] = pts;
+    }
+  }
+
+  return newPaths;
+}
+
 export default function Triangle({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmetry, demoMode, demoStep, demoCenters, range = 12 }: Props) {
   const tiles: React.ReactNode[] = [];
 

@@ -81,3 +81,136 @@ export default function Rectangle({ tilePathData, colorA, colorB, RADIUS, CENTER
 
   return <>{tiles}</>;
 }
+
+export type Point = { x: number; y: number };
+
+export function applySquareEdit(newPaths: Record<number, Point[]>, activePoint: { edgeIdx: number; pointIdx: number } | null, baseVertices: Point[], triSymmetry: 'cw' | 'ccw', transformType: 'rotate90' | 'translate' | 'glide', CENTER: number) {
+  if (!activePoint) return newPaths;
+  // Edge indices (with startAngle -PI/4): 0=right,1=top,2=left,3=bottom
+  const driven = 3; // bottom edge
+
+  // When the top edge is edited
+  if (activePoint.edgeIdx === 1) {
+    const topIdx = 1;
+    if (transformType === 'translate') {
+      const tv0 = baseVertices[topIdx];
+      const tv1 = baseVertices[(topIdx + 1) % 4];
+      const tmx = (tv0.x + tv1.x) / 2;
+      const tmy = (tv0.y + tv1.y) / 2;
+      const tcp = newPaths[topIdx][0];
+      const tvx = tcp.x - tmx;
+      const tvy = tcp.y - tmy;
+
+      const bottomIdx = driven;
+      const bv0 = baseVertices[bottomIdx];
+      const bv1 = baseVertices[(bottomIdx + 1) % 4];
+      const bmx = (bv0.x + bv1.x) / 2;
+      const bmy = (bv0.y + bv1.y) / 2;
+      newPaths[bottomIdx] = [{ x: bmx + tvx, y: bmy + tvy }];
+    } else if (transformType === 'glide') {
+      const tcp = newPaths[topIdx][0];
+      const bottomIdx = driven;
+      const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
+      const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
+      const mirrored = { x: 2 * guideCx - tcp.x, y: 2 * guideCy - tcp.y };
+
+      const bv0 = baseVertices[bottomIdx];
+      const bv1 = baseVertices[(bottomIdx + 1) % 4];
+      const ax = bv0.x, ay = bv0.y;
+      const bx = bv1.x, by = bv1.y;
+      const abx = bx - ax, aby = by - ay;
+      const abLen2 = (abx * abx + aby * aby) || 1;
+      const apx = mirrored.x - ax, apy = mirrored.y - ay;
+      const t = (apx * abx + apy * aby) / abLen2;
+      const projx = ax + t * abx;
+      const projy = ay + t * aby;
+      const reflectX = 2 * projx - mirrored.x;
+      const reflectY = 2 * projy - mirrored.y;
+      newPaths[bottomIdx] = [{ x: reflectX, y: reflectY }];
+    } else {
+      const rightIdx = triSymmetry === 'cw' ? 0 : 2;
+      const tv0 = baseVertices[topIdx];
+      const tv1 = baseVertices[(topIdx + 1) % 4];
+      const tmx = (tv0.x + tv1.x) / 2;
+      const tmy = (tv0.y + tv1.y) / 2;
+      const tcp = newPaths[topIdx][0];
+      const tvx = tcp.x - tmx;
+      const tvy = tcp.y - tmy;
+      const trad = Math.PI / 2;
+      const trx = Math.cos(trad) * tvx - Math.sin(trad) * tvy;
+      const try_ = Math.sin(trad) * tvx + Math.cos(trad) * tvy;
+
+      const rp0 = baseVertices[rightIdx];
+      const rp1 = baseVertices[(rightIdx + 1) % 4];
+      const rmx = (rp0.x + rp1.x) / 2;
+      const rmy = (rp0.y + rp1.y) / 2;
+      newPaths[rightIdx] = [{ x: rmx + trx, y: rmy + try_ }];
+    }
+  }
+
+  // If the user drags the right edge
+  const rightIdxForTranslate = triSymmetry === 'cw' ? 0 : 2;
+  const leftIdx = 2;
+  if (activePoint.edgeIdx === rightIdxForTranslate) {
+    if (transformType === 'translate') {
+      const rp0 = baseVertices[rightIdxForTranslate];
+      const rp1 = baseVertices[(rightIdxForTranslate + 1) % 4];
+      const rmx = (rp0.x + rp1.x) / 2;
+      const rmy = (rp0.y + rp1.y) / 2;
+      const rcp = newPaths[rightIdxForTranslate][0];
+      const rvx = rcp.x - rmx;
+      const rvy = rcp.y - rmy;
+
+      const lv0 = baseVertices[leftIdx];
+      const lv1 = baseVertices[(leftIdx + 1) % 4];
+      const lmx = (lv0.x + lv1.x) / 2;
+      const lmy = (lv0.y + lv1.y) / 2;
+      newPaths[leftIdx] = [{ x: lmx + rvx, y: lmy + rvy }];
+    } else if (transformType === 'glide') {
+      const rcp = newPaths[rightIdxForTranslate][0];
+      const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
+      const guideCy = baseVertices.reduce((s, v) => s + v.y, 0) / baseVertices.length;
+      const mirrored = { x: 2 * guideCx - rcp.x, y: 2 * guideCy - rcp.y };
+
+      const lv0 = baseVertices[leftIdx];
+      const lv1 = baseVertices[(leftIdx + 1) % 4];
+      const ax = lv0.x, ay = lv0.y;
+      const bx = lv1.x, by = lv1.y;
+      const abx = bx - ax, aby = by - ay;
+      const abLen2 = (abx * abx + aby * aby) || 1;
+      const apx = mirrored.x - ax, apy = mirrored.y - ay;
+      const t = (apx * abx + apy * aby) / abLen2;
+      const projx = ax + t * abx;
+      const projy = ay + t * aby;
+      const reflectX = 2 * projx - mirrored.x;
+      const reflectY = 2 * projy - mirrored.y;
+      newPaths[leftIdx] = [{ x: reflectX, y: reflectY }];
+    }
+  }
+
+  // When the bottom edge (driven) is edited, update the left edge midpoint
+  if (activePoint.edgeIdx === driven) {
+    const leftIdx = 2;
+    const bv0 = baseVertices[driven];
+    const bv1 = baseVertices[(driven + 1) % 4];
+    const bmx = (bv0.x + bv1.x) / 2;
+    const bmy = (bv0.y + bv1.y) / 2;
+    const drivenPts = newPaths[driven];
+    if (drivenPts && drivenPts.length > 0) {
+      let cp = drivenPts[0];
+      if (drivenPts.length >= 2) cp = { x: (drivenPts[0].x + drivenPts[1].x) / 2, y: (drivenPts[0].y + drivenPts[1].y) / 2 };
+      const dvx = cp.x - bmx;
+      const dvy = cp.y - bmy;
+      const ang = Math.PI / 2;
+      const lx = Math.cos(ang) * dvx - Math.sin(ang) * dvy;
+      const ly = Math.sin(ang) * dvx + Math.cos(ang) * dvy;
+      const lv0 = baseVertices[leftIdx];
+      const lv1 = baseVertices[(leftIdx + 1) % 4];
+      const lmx = (lv0.x + lv1.x) / 2;
+      const lmy = (lv0.y + lv1.y) / 2;
+      newPaths[leftIdx] = [{ x: lmx + lx, y: lmy + ly }];
+    }
+  }
+
+  return newPaths;
+}
