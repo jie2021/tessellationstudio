@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 import SquareShape, { applySquareEdit, Point as SquarePoint, buildSquareDemoTiles, renderSquareControls, startSquareDemo, stopSquareDemo, nextSquareStep, prevSquareStep, getSquareDemoText as squareGetDemoText } from './Square';
-import HexagonShape from './Hexagon';
+import HexagonShape, { applyHexagonEdit, renderHexagonControls, startHexagonDemo, stopHexagonDemo, nextHexagonStep, prevHexagonStep, getHexagonDemoText, buildHexagonDemoTiles } from './Hexagon';
 import TriangleShape, { initTrianglePaths, applyTriangleEdit, Point as TriPoint, startTriangleDemo, stopTriangleDemo, renderTriangleControls, nextTriangleStep, prevTriangleStep, getTriangleDemoText, triangleAutoAdvance } from './Triangle';
 
 // --- Types ---
@@ -90,12 +90,10 @@ export default function App() {
   const [colorB, setColorB] = useState('#ffffff');
   const [showGrid, setShowGrid] = useState(true);
   const [zoom, setZoom] = useState(1);
-  // Triangle symmetry mode: which edge maps to which
-  // 'cw':  edge i -> edge (i+2)%3 (60° CW rotation around triangle center)
-  // 'ccw': edge i -> edge (i+1)%3 (60° CCW rotation around triangle center)
-  const [triSymmetry, setTriSymmetry] = useState<'cw' | 'ccw'>('cw');
+  // Triangle symmetry is fixed to clockwise by default
+  const TRI_SYMMETRY: 'cw' = 'cw';
   const [useCurve, setUseCurve] = useState(true);
-  const [transformType, setTransformType] = useState<'rotate90' | 'translate' | 'glide'>('rotate90');
+  const [transformType, setTransformType] = useState<'rotate90' | 'rotate120' | 'translate' | 'glide'>('rotate90');
   const [demoMode, setDemoMode] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
   const demoIntervalRef = React.useRef<number | null>(null);
@@ -127,7 +125,7 @@ export default function App() {
 
     // Delegate triangle initialization to helper when appropriate
     if (shapeType === 'triangle') {
-      const tri = initTrianglePaths(baseVertices as TriPoint[], RADIUS, triSymmetry);
+      const tri = initTrianglePaths(baseVertices as TriPoint[], RADIUS, TRI_SYMMETRY);
       for (let i = 0; i < numEdges; i++) {
         if (!paths[i]) paths[i] = tri[i];
       }
@@ -155,6 +153,7 @@ export default function App() {
   // When switching to square, default the transform type to 90° rotation
   useEffect(() => {
     if (shapeType === 'square') setTransformType('rotate90');
+    if (shapeType === 'hexagon') setTransformType('rotate120');
   }, [shapeType]);
 
   // When the transform type changes, reset any edited control points
@@ -186,12 +185,24 @@ export default function App() {
     triangleAutoAdvance(demoMode, demoStep, demoCenters.length, setDemoStep);
   }, [demoMode, demoStep, demoCenters.length]);
 
-  const nextDemoStep = () => nextTriangleStep(setDemoStep);
-  const prevDemoStep = () => prevTriangleStep(setDemoStep);
+  const nextDemoStep = () => {
+    if (shapeType === 'triangle') return nextTriangleStep(setDemoStep);
+    if (shapeType === 'hexagon') return nextHexagonStep(setDemoStep);
+    return nextTriangleStep(setDemoStep);
+  };
+  const prevDemoStep = () => {
+    if (shapeType === 'triangle') return prevTriangleStep(setDemoStep);
+    if (shapeType === 'hexagon') return prevHexagonStep(setDemoStep);
+    return prevTriangleStep(setDemoStep);
+  };
 
-  const getDemoText = (step: number) => getTriangleDemoText(step, triSymmetry);
+  const getDemoText = (step: number) => {
+    if (shapeType === 'triangle') return getTriangleDemoText(step, TRI_SYMMETRY);
+    if (shapeType === 'hexagon') return getHexagonDemoText(step, transformType as 'rotate120' | 'translate' | 'glide');
+    return getTriangleDemoText(step, TRI_SYMMETRY);
+  };
 
-  const getSquareDemoText = (step: number) => squareGetDemoText(step, transformType);
+  const getSquareDemoText = (step: number) => squareGetDemoText(step, transformType as 'rotate90' | 'translate' | 'glide');
 
   const handleMouseDown = (edgeIdx: number, pointIdx: number) => {
     setActivePoint({ edgeIdx, pointIdx });
@@ -217,7 +228,7 @@ export default function App() {
     const x = (clientX - rect.left) * (CANVAS_SIZE / rect.width);
     const y = (clientY - rect.top) * (CANVAS_SIZE / rect.height);
 
-    setEdgePaths(prev => {
+      setEdgePaths(prev => {
       const newPaths = { ...currentEdgePaths };
       const points = [...newPaths[activePoint.edgeIdx]];
       points[activePoint.pointIdx] = { x, y };
@@ -227,13 +238,18 @@ export default function App() {
       if (shapeType === 'triangle') {
         // applyTriangleEdit will return a newPaths object with any triangle-specific
         // paired/mirror updates applied.
-        return applyTriangleEdit(newPaths, activePoint, baseVertices as TriPoint[], triSymmetry);
+        return applyTriangleEdit(newPaths, activePoint, baseVertices as TriPoint[], TRI_SYMMETRY);
       }
 
       // Delegate square-specific edit behavior
       if (shapeType === 'square') {
-        return applySquareEdit(newPaths, activePoint, baseVertices as SquarePoint[], triSymmetry, transformType, CENTER);
+        return applySquareEdit(newPaths, activePoint, baseVertices as SquarePoint[], TRI_SYMMETRY, transformType as 'rotate90' | 'translate' | 'glide', CENTER);
       }
+
+        // Delegate hexagon-specific edit behavior
+        if (shapeType === 'hexagon') {
+          return applyHexagonEdit(newPaths, activePoint, baseVertices as Point[], transformType as any);
+        }
 
       return newPaths;
     });
@@ -273,7 +289,7 @@ export default function App() {
 
   // Precompute square demo tiles (delegated to Square.tsx)
   const squareDemoTiles = useMemo(() =>
-    buildSquareDemoTiles({ squareDemoMode, squareDemoStep, tilePathData, baseVertices, colorA, colorB, transformType, RADIUS }),
+    buildSquareDemoTiles({ squareDemoMode, squareDemoStep, tilePathData, baseVertices, colorA, colorB, transformType: transformType as 'rotate90' | 'translate' | 'glide', RADIUS }),
     [squareDemoMode, squareDemoStep, tilePathData, baseVertices, colorA, colorB, transformType, RADIUS]
   );
 
@@ -282,9 +298,6 @@ export default function App() {
       {/* Sidebar Controls */}
       <aside className="w-full lg:w-96 bg-white border-b lg:border-b-0 lg:border-r border-neutral-200 p-8 flex flex-col gap-8 z-20 shadow-xl lg:h-screen lg:overflow-y-auto">
         <header>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold uppercase tracking-widest mb-4">
-            <Grid3X3 size={12} /> Interactive Design Tool
-          </div>
           <h1 className="text-3xl font-display font-bold tracking-tight text-neutral-900 leading-none">
             Tessellation <span className="text-indigo-600">Studio</span>
           </h1>
@@ -322,14 +335,14 @@ export default function App() {
 
           <section className="space-y-4">
             <label className="text-[11px] font-bold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
-              <Palette size={14} /> 2. 테마 색상
+              <Palette size={14} /> 2. 도형 색상
             </label>
             <div className="flex gap-3 flex-wrap">
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-row gap-8">
                 <div>
                   <div className="text-[10px] text-neutral-400 mb-2">Primary</div>
                   <div className="flex gap-2">
-                    {['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6'].map(c => (
+                    {['#6366f1', '#ec4899'].map(c => (
                       <button
                         key={c}
                         onClick={() => setColorA(c)}
@@ -351,7 +364,7 @@ export default function App() {
                 <div>
                   <div className="text-[10px] text-neutral-400 mb-2">Secondary</div>
                   <div className="flex gap-2">
-                    {['#ffffff', '#f3f4f6', '#fafafa', '#fde68a', '#d1fae5'].map(c => (
+                    {['#ffffff',  '#fde68a'].map(c => (
                       <button
                         key={c}
                         onClick={() => setColorB(c)}
@@ -378,7 +391,7 @@ export default function App() {
               <Move size={14} /> 3. 변 형태
             </label>
             <div className="grid grid-cols-2 gap-2">
-              {([{ val: false, label: '직선', desc: 'Straight' }, { val: true, label: '곡선', desc: 'Bezier' }] as const).map(opt => (
+              {([{ val: false, label: '직선' }, { val: true, label: '곡선' }] as const).map(opt => (
                 <button
                   key={String(opt.val)}
                   onClick={() => setUseCurve(opt.val)}
@@ -389,7 +402,6 @@ export default function App() {
                   }`}
                 >
                   <span className="text-[11px] font-black tracking-tight">{opt.label}</span>
-                  <span className="text-[9px] mt-0.5 opacity-60">{opt.desc}</span>
                 </button>
               ))}
             </div>
@@ -423,39 +435,38 @@ export default function App() {
             </section>
           )}
 
-          {shapeType === 'triangle' && (
+          {shapeType === 'hexagon' && (
             <section className="space-y-4">
               <label className="text-[11px] font-bold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
-                <RotateCcw size={14} /> 4. 변 대칭 모드
+                <RotateCcw size={14} /> 4. 변형 종류
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {([
-                  { id: 'cw',  label: 'CW 60°',  desc: '시계방향' },
-                  { id: 'ccw', label: 'CCW 60°', desc: '반시계' },
+                  { id: 'rotate120', label: '120도 회전' },
+                  { id: 'translate', label: '평행 이동' },
+                  { id: 'glide', label: '미끄럼 반사' },
                 ] as const).map(opt => (
                   <button
                     key={opt.id}
-                    onClick={() => { setTriSymmetry(opt.id); resetPaths(); }}
+                    onClick={() => setTransformType(opt.id as any)}
                     className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all duration-200 ${
-                      triSymmetry === opt.id
+                      transformType === opt.id
                         ? 'border-indigo-600 bg-indigo-50 text-indigo-600 shadow-inner'
                         : 'border-neutral-100 bg-neutral-50 text-neutral-400 hover:border-neutral-200'
                     }`}
                   >
                     <span className="text-[11px] font-black tracking-tight">{opt.label}</span>
-                    <span className="text-[9px] mt-0.5 opacity-60">{opt.desc}</span>
                   </button>
                 ))}
               </div>
-              <p className="text-[11px] text-neutral-400 leading-relaxed bg-neutral-50 rounded-xl p-3 border border-neutral-100">
-                한 변을 드래그하면 대응 변이 자동으로 반전되어 테셀레이션이 완성됩니다.
-              </p>
             </section>
           )}
 
+          {/* triangle symmetry option removed; default clockwise */}
+
           <section className="space-y-4">
             <label className="text-[11px] font-bold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
-              <Info size={14} /> {shapeType === 'triangle' || shapeType === 'square' ? '5' : '4'}. 사용 방법
+              <Info size={14} /> {shapeType === 'square' ? '5' : '4'}. 사용 방법
             </label>
             <div className="bg-neutral-50 p-5 rounded-2xl border border-neutral-100 space-y-3">
               <div className="flex gap-3">
@@ -547,14 +558,14 @@ export default function App() {
               <g transform={`translate(${offset.x}, ${offset.y}) scale(${zoom})`}>
                 {shapeType === 'square' && (
                   squareDemoMode ? squareDemoTiles : (
-                    <SquareShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={triSymmetry} transformType={transformType} />
+                    <SquareShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={TRI_SYMMETRY} transformType={transformType as 'rotate90' | 'translate' | 'glide'} />
                   )
                 )}
                 {shapeType === 'hexagon' && (
-                  <HexagonShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} />
+                  <HexagonShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} transformType={transformType as 'rotate120' | 'translate' | 'glide'} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} />
                 )}
                 {shapeType === 'triangle' && (
-                  <TriangleShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={triSymmetry} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} />
+                  <TriangleShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={TRI_SYMMETRY} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} />
                 )}
               </g>
           </svg>
@@ -610,13 +621,18 @@ export default function App() {
                     const ei = Number(edgeIdx);
 
                     if (shapeType === 'triangle') {
-                      return renderTriangleControls({ ei, points: points as Point[], activePoint, triSymmetry, handleMouseDown });
+                      return renderTriangleControls({ ei, points: points as Point[], activePoint, triSymmetry: TRI_SYMMETRY, handleMouseDown });
                     }
 
                     // Non-triangle shapes: special-case square so bottom edge is draggable
                     // and the paired edge is shown orange and non-interactive
                     if (shapeType === 'square') {
-                      return renderSquareControls({ ei, points: points as Point[], activePoint, triSymmetry, transformType, handleMouseDown });
+                      return renderSquareControls({ ei, points: points as Point[], activePoint, triSymmetry: TRI_SYMMETRY, transformType: transformType as 'rotate90' | 'translate' | 'glide', handleMouseDown });
+                    }
+
+                    // Hexagon-specific controls
+                    if (shapeType === 'hexagon') {
+                      return renderHexagonControls({ ei, points: points as Point[], activePoint, transformType: transformType as any, handleMouseDown });
                     }
 
                     // Fallback for other non-triangle shapes
@@ -745,6 +761,7 @@ export default function App() {
               onClick={() => {
                 if (shapeType === 'triangle') startTriangleDemo({ setShapeType, setDemoCenters, setDemoMode, setDemoStep, demoIntervalRef, RADIUS });
                 else if (shapeType === 'square') startSquareDemo({ setShapeType, setSquareDemoMode, setSquareDemoStep, setShowEditor });
+                else if (shapeType === 'hexagon') startHexagonDemo({ setShapeType, setDemoCenters, setDemoMode, setDemoStep, demoIntervalRef, RADIUS, transformType: transformType as 'rotate120' | 'translate' | 'glide' });
               }}
               className="px-3 py-2 rounded-full font-bold text-sm transition bg-indigo-600 text-white hover:bg-indigo-700"
               title="설명하기"

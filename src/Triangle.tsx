@@ -165,7 +165,7 @@ export function stopTriangleDemo(params: Parameters<typeof stopDemo>[0]) {
 }
 
 export function nextTriangleStep(setter: React.Dispatch<React.SetStateAction<number>>) {
-  setter(prev => Math.min(prev + 1, 6 + (0)));
+  setter(prev => Math.min(prev + 1, 6 + 80));
 }
 
 export function prevTriangleStep(setter: React.Dispatch<React.SetStateAction<number>>) {
