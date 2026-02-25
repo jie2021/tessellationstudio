@@ -292,6 +292,13 @@ export default function App() {
 
   const getSquareDemoText = (step: number) => {
     if (step <= 0) return '데모 준비 중... (다음 버튼을 눌러 시작하세요)';
+    if (transformType === 'translate') {
+      if (step === 1) return '기본 도형을 표시합니다.';
+      if (step >= 2 && step <= 4) return `기준점을 기준으로 동일한 도형을 평행이동으로 복사합니다 (스텝 ${step - 1}).`;
+      const add = Math.max(0, step - 4);
+      return `주변을 평행이동으로 채웁니다 — 추가 패치 #${add}`;
+    }
+
     if (step === 1) return '기본 도형을 표시합니다.';
     if (step === 2) return '오른쪽 하단 꼭지점을 기준으로 90도 회전합니다.';
     if (step === 3) return '같은 기준점에서 180도 회전합니다.';
@@ -568,8 +575,9 @@ export default function App() {
 
     const arr: React.ReactNode[] = [];
 
-    // Show the central assembly: 1..4 rotated wedges depending on step
-    const n = Math.min(4, Math.max(1, squareDemoStep));
+    // Show the central assembly: for rotate mode reveal 1..4 rotated wedges;
+    // for translate mode show only a single tile (no 4-piece assembly).
+    const n = transformType === 'translate' ? 1 : Math.min(4, Math.max(1, squareDemoStep));
     for (let k = 0; k < n; k++) {
       const angle = transformType === 'translate' ? 0 : k * 90;
       const wedgeFill = (k % 2 === 0) ? colorA : colorB;
@@ -608,21 +616,35 @@ export default function App() {
         const { cx, cy } = centers[i];
         const tx = cx - 0; // we translate the whole assembly to (cx,cy) relative to pivot
         const ty = cy - 0;
-        // For translated assemblies, preserve the 4-wedge color pattern
-          for (let k = 0; k < 4; k++) {
-          const angle = transformType === 'translate' ? 0 : k * 90;
-          const wedgeFill = (k % 2 === 0) ? colorA : colorB;
+        // For translated assemblies: in translate mode place a single tile; in rotate mode place 4 rotated wedges
+        if (transformType === 'translate') {
           arr.push(
             <path
-              key={`sqdemo-${i}-${k}`}
+              key={`sqdemo-${i}-0`}
               d={tilePathData}
-              transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
-              fill={wedgeFill}
+              transform={`translate(${tx}, ${ty}) rotate(0, ${pivot.x}, ${pivot.y})`}
+              fill={i % 2 === 0 ? colorA : colorB}
               fillOpacity={1}
               stroke="#000"
               strokeWidth={0.5}
             />
           );
+        } else {
+          for (let k = 0; k < 4; k++) {
+            const angle = k * 90;
+            const wedgeFill = (k % 2 === 0) ? colorA : colorB;
+            arr.push(
+              <path
+                key={`sqdemo-${i}-${k}`}
+                d={tilePathData}
+                transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
+                fill={wedgeFill}
+                fillOpacity={1}
+                stroke="#000"
+                strokeWidth={0.5}
+              />
+            );
+          }
         }
       }
     }
@@ -649,13 +671,29 @@ export default function App() {
     const range = 12;
 
     if (shapeType === 'square') {
-      // Square circumradius = RADIUS, side = RADIUS * sqrt(2)
-      // Apply 90° rotation symmetry: each tile rotated by (r+c)*90°
-      const side = RADIUS * Math.sqrt(2);
+      // Square tiling.
+      // By default use side = RADIUS * sqrt(2) and rotate by 90° per cell.
+      // In translate mode use the tile's bounding-box width/height as the translation step
+      // so background tiling matches the demo (translation-only) behavior.
+      const defaultSide = RADIUS * Math.sqrt(2);
+      let stepX = defaultSide;
+      let stepY = defaultSide;
+      if (transformType === 'translate') {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const v of baseVertices) {
+          if (v.x < minX) minX = v.x;
+          if (v.y < minY) minY = v.y;
+          if (v.x > maxX) maxX = v.x;
+          if (v.y > maxY) maxY = v.y;
+        }
+        stepX = Math.max(1, maxX - minX);
+        stepY = Math.max(1, maxY - minY);
+      }
+
       for (let r = -range; r < range; r++) {
         for (let c = -range; c < range; c++) {
-          const tx = c * side - CENTER;
-          const ty = r * side - CENTER;
+          const tx = c * stepX - CENTER;
+          const ty = r * stepY - CENTER;
           const rot = transformType === 'translate' ? 0 : ((r + c) % 4) * 90;
           tiles.push(
             <path
@@ -1127,7 +1165,7 @@ export default function App() {
               <g transform={`translate(${offset.x}, ${offset.y}) scale(${zoom})`}>
                 {shapeType === 'square' && (
                   squareDemoMode ? squareDemoTiles : (
-                    <Rectangle tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={triSymmetry} />
+                    <Rectangle tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={triSymmetry} transformType={transformType} />
                   )
                 )}
                 {shapeType === 'hexagon' && (

@@ -8,9 +8,10 @@ interface Props {
   CENTER: number;
   range?: number;
   triSymmetry?: 'cw' | 'ccw';
+  transformType?: 'rotate90' | 'translate' | 'glide';
 }
 
-export default function Rectangle({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 12, triSymmetry = 'cw' }: Props) {
+export default function Rectangle({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 12, triSymmetry = 'cw', transformType = 'rotate90' }: Props) {
   // Build base square vertices (matching App.getBaseVertices for square)
   const sides = 4;
   const startAngle = -Math.PI / 4;
@@ -37,10 +38,11 @@ export default function Rectangle({ tilePathData, colorA, colorB, RADIUS, CENTER
     return { x: cx + rx, y: cy + ry };
   };
 
-  // Compute bounding box of the assembled 4-rotation patch
+  // Compute bounding box of the assembled patch (consider rotation only when appropriate)
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (let k = 0; k < 4; k++) {
-    const angle = k * 90;
+  const angles = transformType === 'translate' ? [0] : [0, 90, 180, 270];
+  for (let k = 0; k < angles.length; k++) {
+    const angle = angles[k];
     for (const v of baseVertices) {
       const rp = rotatePoint(v, angle, pivot.x, pivot.y);
       if (rp.x < minX) minX = rp.x;
@@ -59,12 +61,13 @@ export default function Rectangle({ tilePathData, colorA, colorB, RADIUS, CENTER
     for (let c = -range; c < range; c++) {
       const tx = c * width - CENTER;
       const ty = r * height - CENTER;
-      // For each assembly cell, render the 4 rotated copies about the pivot
-      for (let k = 0; k < 4; k++) {
-        const angle = k * 90;
+      // For each assembly cell, render rotated copies about the pivot unless translate-only mode
+      const renderAngles = angles;
+      for (let ai = 0; ai < renderAngles.length; ai++) {
+        const angle = renderAngles[ai];
         tiles.push(
           <path
-            key={`sq-${r}-${c}-${k}`}
+            key={`sq-${r}-${c}-${ai}`}
             d={tilePathData}
             transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
             fill={(r + c) % 2 === 0 ? colorA : colorB}
