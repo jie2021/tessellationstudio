@@ -265,8 +265,8 @@ export default function App() {
     if (transformType === 'translate') {
       if (step === 1) return '기본 도형을 표시합니다.';
       // if (step >= 2 && step <= 4) return `기준점을 기준으로 동일한 도형을 평행이동으로 복사합니다 (스텝 ${step - 1}).`;
-      // const add = Math.max(0, step - 4);
-      return `주변을 평행이동으로 채웁니다 — #${step}`;
+      const add = Math.max(0, step - 1);
+      return `주변을 평행이동으로 채웁니다 — #${add}`;
     }
 
     if (step === 1) return '기본 도형을 표시합니다.';
