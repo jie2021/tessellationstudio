@@ -153,12 +153,12 @@ interface Props {
 
 export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 12, transformType, demoMode = false, demoStep = 0, demoCenters = [] }: Props) {
   // For background, if not in demo mode, show a large patch of tiles to illustrate the pattern
-  if(!demoMode){
-      demoStep = 80;
-  }
+  
   const demoTiles: React.ReactNode[] = [];
   if (transformType==='rotate120') {
-    
+    if(!demoMode){
+      demoStep = 80;
+    }
     // Recompute base vertices local to tile
     const baseVerts: { x: number; y: number }[] = [];
     const startAngle = 0;
@@ -242,19 +242,78 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       }
     }
   }else if (transformType === 'translate' ) {
-    // For translation, simply show more and more translated copies in hex grid arrangement
-    const s = RADIUS * 1.5; 
-    const stepX = s ;
-    const stepY = s * Math.sqrt(3)*2;
-    const demoRange = 8;
-    const centers: {cx:number, cy:number}[] = []; 
-    for (let row = -demoRange; row <= demoRange; row++) {
-      for (let col = -demoRange; col <= demoRange; col++) {
-        if (row === 0 && col === 0) continue;   
-        const hexCX = col * stepX;
-        const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
-        centers.push({ cx: hexCX, cy: hexCY });
-      } 
+    // For translation: do NOT assemble a patch — simply tile the base
+    // shape by translating it horizontally and vertically by the
+    // base shape size (axis-aligned grid). Always show the base tile
+    // then reveal neighboring translations as demoStep increases.
+    // Recompute base vertices to measure base width/height
+    if(!demoMode){
+      demoStep = 240;
+    }
+    const baseVertsT: { x: number; y: number }[] = [];
+    const startAngleT = 0;
+    for (let i = 0; i < 6; i++) {
+      const angle = startAngleT + (i * 2 * Math.PI) / 6;
+      baseVertsT.push({ x: CENTER + RADIUS * Math.cos(angle), y: CENTER + RADIUS * Math.sin(angle) });
+    }
+    const xs = baseVertsT.map(v => v.x);
+    const ys = baseVertsT.map(v => v.y);
+    const baseW = Math.max(...xs) - Math.min(...xs);
+    const baseH = Math.max(...ys) - Math.min(...ys);
+
+    // always show center tile
+    demoTiles.push(
+      <path
+        key={`hex-demo-center`}
+        d={tilePathData}
+        transform={`translate(0, 0)`}
+        fill={colorA}
+        stroke="#000"
+        strokeWidth="0.5"
+      />
+    );
+
+    if (demoStep > 1) {
+      const hexToShow = demoStep - 1;
+      // build centers using two basis vectors aligned with opposite-edge
+      // directions. compute midpoints of edge 0 and edge 1, then use
+      // twice those vectors as center-to-center offsets
+      const centerX = CENTER;
+      const centerY = CENTER;
+      const m0x = (baseVertsT[0].x + baseVertsT[1].x) * 0.5;
+      const m0y = (baseVertsT[0].y + baseVertsT[1].y) * 0.5;
+      const m1x = (baseVertsT[1].x + baseVertsT[2].x) * 0.5;
+      const m1y = (baseVertsT[1].y + baseVertsT[2].y) * 0.5;
+      const v0x = 2 * (m0x - centerX);
+      const v0y = 2 * (m0y - centerY);
+      const v1x = 2 * (m1x - centerX);
+      const v1y = 2 * (m1y - centerY);
+
+      const demoRange = 48;
+      const centers: {cx:number, cy:number}[] = [];
+      for (let r = -demoRange; r <= demoRange; r++) {
+        for (let c = -demoRange; c <= demoRange; c++) {
+          if (r === 0 && c === 0) continue;
+          const cx = c * v0x + r * v1x;
+          const cy = c * v0y + r * v1y;
+          centers.push({ cx, cy });
+        }
+      }
+      centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
+      const reveal = Math.min(hexToShow, centers.length);
+      for (let i = 0; i < reveal; i++) {
+        const { cx, cy } = centers[i];
+        demoTiles.push(
+          <path
+            key={`hex-demo-fill-${i}`}
+            d={tilePathData}
+            transform={`translate(${cx}, ${cy})`}
+            fill={i % 2 === 0 ? colorA : colorB}
+            stroke="#000"
+            strokeWidth="0.5"
+          />
+        );
+      }
     }
   }else if (transformType === 'glide') {
     // For glide, first show the reflected copy across one edge, then start showing translations
@@ -311,15 +370,30 @@ export function startHexagonDemo(params: {
     }
     centers.sort((a,b) => (Math.abs(a.cy) - Math.abs(b.cy)));
   } else {
-    const s = RADIUS * Math.sqrt(3);
-    const stepX = s * 1.5;
-    const stepY = s * Math.sqrt(3);
+    // use translations along opposite-edge directions (no staggering)
+    // compute base midpoints and derive two basis vectors (use origin)
+    const centerX = 0;
+    const centerY = 0;
+    const bv: { x: number; y: number }[] = [];
+    const startAngle = 0;
+    for (let i = 0; i < 6; i++) {
+      const angle = startAngle + (i * 2 * Math.PI) / 6;
+      bv.push({ x: centerX + RADIUS * Math.cos(angle), y: centerY + RADIUS * Math.sin(angle) });
+    }
+    const m0x = (bv[0].x + bv[1].x) * 0.5;
+    const m0y = (bv[0].y + bv[1].y) * 0.5;
+    const m1x = (bv[1].x + bv[2].x) * 0.5;
+    const m1y = (bv[1].y + bv[2].y) * 0.5;
+    const v0x = 2 * (m0x - centerX);
+    const v0y = 2 * (m0y - centerY);
+    const v1x = 2 * (m1x - centerX);
+    const v1y = 2 * (m1y - centerY);
     const demoRange = 4;
     for (let row = -demoRange; row <= demoRange; row++) {
       for (let col = -demoRange; col <= demoRange; col++) {
         if (row === 0 && col === 0) continue;
-        const hexCX = col * stepX;
-        const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
+        const hexCX = col * v0x + row * v1x;
+        const hexCY = col * v0y + row * v1y;
         centers.push({cx: hexCX, cy: hexCY});
       }
     }
@@ -354,7 +428,7 @@ export function getHexagonDemoText(step: number, transformType: 'rotate120' | 't
   if (transformType === 'translate') {
     if (step === 1) return '기본 도형을 표시합니다.';
     const add = Math.max(0, step - 1);
-    return `주변을 평행이동으로 채웁니다 — #${add}`;
+    return `수평/수직 평행이동으로 채웁니다 — #${add}`;
   }
   if (transformType === 'glide') {
     if (step === 1) return '기본 도형을 표시합니다.';
