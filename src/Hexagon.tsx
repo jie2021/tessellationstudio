@@ -28,12 +28,24 @@ export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint:
 
   // Determine paired edge index depending on transform type
   let paired = -1;
+  // mappingMode controls whether the pairing acts as a translate or glide reflection
+  let mappingMode: 'translate' | 'glide' | 'rotate120' = transformType === 'rotate120' ? 'rotate120' : transformType;
   if (transformType === 'rotate120') {
     // map odd -> previous even: 1->0,3->2,5->4
     if (ei % 2 === 1) paired = (ei + 5) % 6; else return newPaths;
-  } else {
-    // translate/glide: control edges are 1,3,5 and paired are opposite edges (i+3)%6
+  } else if (transformType === 'translate') {
+    // translate: interactive edges remain 1,3,5 and pair with opposite edges
     if ([1,3,5].includes(ei)) paired = (ei + 3) % 6; else return newPaths;
+  } else {
+    // glide mode: use requested pairing
+    // 1<->4 -> indices 0<->3 : translation
+    // 2<->3 -> indices 1<->2 : glide reflection
+    // 5<->6 -> indices 4<->5 : glide reflection
+    if ([0,1,4].includes(ei)) {
+      if (ei === 0) { paired = 3; mappingMode = 'translate'; }
+      else if (ei === 1) { paired = 2; mappingMode = 'glide'; }
+      else if (ei === 4) { paired = 5; mappingMode = 'glide'; }
+    } else return newPaths;
   }
 
   const moved = pts[activePoint.pointIdx];
@@ -44,8 +56,8 @@ export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint:
   const pv1 = baseVertices[(paired + 1) % 6];
   const pex = pv1.x - pv0.x, pey = pv1.y - pv0.y;
   const plen = Math.sqrt(pex*pex + pey*pey) || 1;
-  // decide mapping depending on transform type
-  if (transformType === 'rotate120') {
+  // decide mapping depending on mappingMode
+  if (mappingMode === 'rotate120') {
     // rotation pairing: heuristic mapping and flip side
     const tPaired = 1 - t;
     const dPaired = -d;
@@ -54,7 +66,7 @@ export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint:
     const nx = -pey / plen; const ny = pex / plen;
     const target = { x: baseX + dPaired * nx, y: baseY + dPaired * ny };
     newPaths[paired] = [{ x: target.x, y: target.y }];
-  } else if (transformType === 'translate') {
+  } else if (mappingMode === 'translate') {
     // pure translation: compute the delta of the moved control relative
     // to the original midpoint of its edge, and apply that same delta
     // to the midpoint of the paired (opposite) edge — this matches
@@ -70,8 +82,8 @@ export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint:
     const pairedMidY = pv0.y + pey * 0.5;
     const target = { x: pairedMidX + deltaX, y: pairedMidY + deltaY };
     newPaths[paired] = [{ x: target.x, y: target.y }];
-  } else {
-    // glide (reflection + translation): keep opposite-edge mirrored normal
+  } else if (mappingMode === 'glide') {
+    // glide (reflection + translation): mirror across edge normal, preserve along-edge t
     const tPaired = t;
     const dPaired = -d;
     const baseX = pv0.x + tPaired * pex;
@@ -95,7 +107,9 @@ export function renderHexagonControls(params: {
   // - rotate120: odd edges (1,3,5) are interactive; pairs are even edges (0,2,4)
   // - translate/glide: interactive edges are 1,3,5 and paired are opposite edges (i+3)%6
 
-  const interactiveEdges = transformType === 'rotate120' ? [1,3,5] : [1,3,5];
+  // interactive edges vary by transform mode. For glide expose controls for edges 0,1,4
+  // (user-visible edges 1,2,5) so pairs become 0<->3,1<->2,4<->5
+  const interactiveEdges = transformType === 'glide' ? [0,1,4] : [1,3,5];
   const isInteractiveEdge = interactiveEdges.includes(ei);
 
   return (
