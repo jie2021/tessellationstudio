@@ -404,6 +404,7 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
           d={tilePathData}
           transform={`translate(${tx}, ${ty})`}
           fill={bgFill}
+          opacity={0.5}
           stroke="#000"
           strokeWidth="0.5"
         />
