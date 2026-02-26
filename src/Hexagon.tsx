@@ -292,6 +292,8 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       );
     }
 
+    
+
     // after assembly steps, reveal translated patches across the same hex grid used by rotate120
     if (demoStep > 3) {
       const hexToShow = demoStep - 3;
@@ -336,97 +338,89 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
     }
   }else if (transformType === 'glide') {
     if (!demoMode) demoStep = 80;
-
-    // base vertices (centered at CENTER)
-    const baseVertsT: { x: number; y: number }[] = [];
-    const startAngleT = 0;
+    // 기본 조각으로 평행 이동만 해서 배경을 모두 채웁니다.
+    // Compute lattice centers using opposite-edge directions (same as demo starter)
+    const centerX = 0;
+    const centerY = 0;
+    const bv: { x: number; y: number }[] = [];
+    const startAngle = 0;
     for (let i = 0; i < 6; i++) {
-      const angle = startAngleT + (i * 2 * Math.PI) / 6;
-      baseVertsT.push({ x: CENTER + RADIUS * Math.cos(angle), y: CENTER + RADIUS * Math.sin(angle) });
+      const angle = startAngle + (i * 2 * Math.PI) / 6;
+      bv.push({ x: centerX + RADIUS * Math.cos(angle), y: centerY + RADIUS * Math.sin(angle) });
     }
-    const pivotT = baseVertsT[5];
-
-    // derive a translation vector from the midpoint of edge 0 (center-to-center)
-    const centerX = CENTER;
-    const centerY = CENTER;
-    const m0x = (baseVertsT[0].x + baseVertsT[1].x) * 0.5;
-    const m0y = (baseVertsT[0].y + baseVertsT[1].y) * 0.5;
-    const m1x = (baseVertsT[1].x + baseVertsT[2].x) * 0.5;
-    const m1y = (baseVertsT[1].y + baseVertsT[2].y) * 0.5;
+    const m0x = (bv[0].x + bv[1].x) * 0.5;
+    const m0y = (bv[0].y + bv[1].y) * 0.5;
+    const m1x = (bv[1].x + bv[2].x) * 0.5;
+    const m1y = (bv[1].y + bv[2].y) * 0.5;
+    // scale basis vectors so centers are spaced by full patch size
     const v0x = 2 * (m0x - centerX);
     const v0y = 2 * (m0y - centerY);
     const v1x = 2 * (m1x - centerX);
     const v1y = 2 * (m1y - centerY);
 
-    // piece offsets: base, translate along base-edge, translate along CCW-adjacent edge
-    const pieceOffsets = [ [0,0], [v0x, v0y], [v1x, v1y] ];
+    const demoRange = 8;
+    const centers: {cx:number, cy:number, col:number, row:number}[] = [];
+    for (let row = -demoRange; row <= demoRange; row++) {
+      for (let col = -demoRange; col <= demoRange; col++) {
+        const hexCX = col * v0x + row * v1x;
+        const hexCY = col * v0y + row * v1y;
+        centers.push({ cx: hexCX, cy: hexCY, col, row });
+      }
+    }
+    centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
 
-    // show assembly at origin using centroid alignment so it matches tiled patches
-    const avgOx = (pieceOffsets[0][0] + pieceOffsets[1][0] + pieceOffsets[2][0]) / 3;
-    const avgOy = (pieceOffsets[0][1] + pieceOffsets[1][1] + pieceOffsets[2][1]) / 3;
-    const piecesToShow = Math.min(3, Math.max(1, demoStep));
-    for (let k = 0; k < piecesToShow; k++) {
-      const ox = pieceOffsets[k][0];
-      const oy = pieceOffsets[k][1];
-      const tx = -avgOx + ox;
-      const ty = -avgOy + oy;
+    // render a single base tile at each center (tilePathData is centered at (CENTER,CENTER))
+    // use centers[0] as the reference tile (#1)
+    const refCol = centers[0]?.col ?? 0;
+    const refRow = centers[0]?.row ?? 0;
+    for (let i = 0; i < centers.length; i++) {
+      const { cx, cy, col, row } = centers[i];
+      const tx = cx - CENTER;
+      const ty = cy - CENTER;
+      // compute hex-grid step distance to reference and use its parity for color
+      const dx0 = col - refCol;
+      const dy0 = row - refRow;
+      const stepsForColor = Math.round((Math.abs(dx0) + Math.abs(dy0) + Math.abs(dx0 + dy0)) / 2);
+      const bgFill = (stepsForColor % 2 === 1) ? colorA : colorB;
       demoTiles.push(
         <path
-          key={`hex-demo-center-${k}`}
+          key={`hex-demo-glide-bg-${i}`}
           d={tilePathData}
           transform={`translate(${tx}, ${ty})`}
-          fill={k % 2 === 0 ? colorA : colorB}
+          fill={bgFill}
           stroke="#000"
           strokeWidth="0.5"
         />
       );
-    }
-
-    // after assembly steps, reveal translated patches across the same hex grid used by rotate120
-    if (demoStep > 3) {
-      const hexToShow = demoStep - 3;
-      const s = RADIUS * 1.5;
-      const stepX = s;
-      const stepY = s * Math.sqrt(3) * 2;
-      const demoRange = 8;
-      const centers: {cx:number, cy:number}[] = [];
-      for (let row = -demoRange; row <= demoRange; row++) {
-        for (let col = -demoRange; col <= demoRange; col++) {
-          if (row === 0 && col === 0) continue;
-          const hexCX = col * stepX;
-          const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
-          centers.push({ cx: hexCX, cy: hexCY });
-        }
-      }
-      centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
-
-      const reveal = Math.min(hexToShow, centers.length);
-      // compute centroid of piece offsets so we can place the patch
-      const avgOx = (pieceOffsets[0][0] + pieceOffsets[1][0] + pieceOffsets[2][0]) / 3;
-      const avgOy = (pieceOffsets[0][1] + pieceOffsets[1][1] + pieceOffsets[2][1]) / 3;
-      for (let i = 0; i < reveal; i++) {
-        const { cx, cy } = centers[i];
-        for (let k = 0; k < 3; k++) {
-          const ox = pieceOffsets[k][0];
-          const oy = pieceOffsets[k][1];
-          const tx = (cx + (ox - avgOx));
-          const ty = cy + (oy - avgOy);
-          demoTiles.push(
-            <path
-              key={`hex-demo-fill-${i}-${k}`}
-              d={tilePathData}
-              transform={`translate(${tx}, ${ty})`}
-              fill={k % 2 === 0 ? colorA : colorB}
-              stroke="#000"
-              strokeWidth="0.5"
-            />
-          );
-        }
-      }
+      // numeric label at tile center (render order index) + distance to tile #1 (pixels)
+      const refCx = centers[0]?.cx ?? cx;
+      const refCy = centers[0]?.cy ?? cy;
+      const dist = Math.hypot(cx - refCx, cy - refCy);
+      const distLabel = Math.round(dist);
+      // compute hex-grid step distance using axial->cube coords
+      const dx = col - refCol;
+      const dy = row - refRow;
+      const steps = Math.round((Math.abs(dx) + Math.abs(dy) + Math.abs(dx + dy)) / 2);
+      demoTiles.push(
+        <text
+          key={`hex-demo-glide-bg-label-${i}`}
+          x={cx}
+          y={cy + Math.max(8, RADIUS * 0.06)}
+          fontSize={Math.max(10, Math.round(RADIUS * 0.12))}
+          fill="#111"
+          fontWeight={700}
+          textAnchor="middle"
+          pointerEvents="none"
+          stroke="#fff"
+          strokeWidth={0.6}
+        >{`${i + 1} (${distLabel}) [${steps}칸]`}</text>
+      );
     }
   }
   return <>{demoTiles}</>;
 }
+  
+
 
 export function startHexagonDemo(params: {
   setShapeType: (s: 'triangle' | 'square' | 'hexagon') => void;
