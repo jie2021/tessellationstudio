@@ -335,33 +335,94 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       }
     }
   }else if (transformType === 'glide') {
-    // For glide, first show the reflected copy across one edge, then start showing translations
-    const s = RADIUS * 1.5; 
-    const stepX = s ;
-    const stepY = s * Math.sqrt(3)*2;
-    const demoRange = 8;
-    const centers: {cx:number, cy:number}[] = [];
-    for (let row = -demoRange; row <= demoRange; row++) {
-      for (let col = -demoRange; col <= demoRange; col++) {
-        if (row === 0 && col === 0) continue;   
-        const hexCX = col * stepX;
-        const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
-        centers.push({ cx: hexCX, cy: hexCY });
-      } 
+    if (!demoMode) demoStep = 80;
+
+    // base vertices (centered at CENTER)
+    const baseVertsT: { x: number; y: number }[] = [];
+    const startAngleT = 0;
+    for (let i = 0; i < 6; i++) {
+      const angle = startAngleT + (i * 2 * Math.PI) / 6;
+      baseVertsT.push({ x: CENTER + RADIUS * Math.cos(angle), y: CENTER + RADIUS * Math.sin(angle) });
     }
-    centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
-    const reveal = Math.max(0, demoStep - 2); 
-    for (let i = 0; i < reveal && i < centers.length; i++) {
-      const { cx, cy } = centers[i];
+    const pivotT = baseVertsT[5];
+
+    // derive a translation vector from the midpoint of edge 0 (center-to-center)
+    const centerX = CENTER;
+    const centerY = CENTER;
+    const m0x = (baseVertsT[0].x + baseVertsT[1].x) * 0.5;
+    const m0y = (baseVertsT[0].y + baseVertsT[1].y) * 0.5;
+    const m1x = (baseVertsT[1].x + baseVertsT[2].x) * 0.5;
+    const m1y = (baseVertsT[1].y + baseVertsT[2].y) * 0.5;
+    const v0x = 2 * (m0x - centerX);
+    const v0y = 2 * (m0y - centerY);
+    const v1x = 2 * (m1x - centerX);
+    const v1y = 2 * (m1y - centerY);
+
+    // piece offsets: base, translate along base-edge, translate along CCW-adjacent edge
+    const pieceOffsets = [ [0,0], [v0x, v0y], [v1x, v1y] ];
+
+    // show assembly at origin using centroid alignment so it matches tiled patches
+    const avgOx = (pieceOffsets[0][0] + pieceOffsets[1][0] + pieceOffsets[2][0]) / 3;
+    const avgOy = (pieceOffsets[0][1] + pieceOffsets[1][1] + pieceOffsets[2][1]) / 3;
+    const piecesToShow = Math.min(3, Math.max(1, demoStep));
+    for (let k = 0; k < piecesToShow; k++) {
+      const ox = pieceOffsets[k][0];
+      const oy = pieceOffsets[k][1];
+      const tx = -avgOx + ox;
+      const ty = -avgOy + oy;
       demoTiles.push(
-        <path          key={`hex-demo-fill-${i}`}
+        <path
+          key={`hex-demo-center-${k}`}
           d={tilePathData}
-          transform={`translate(${cx}, ${cy})`}
-          fill={i % 2 === 0 ? colorA : colorB}
+          transform={`translate(${tx}, ${ty})`}
+          fill={k % 2 === 0 ? colorA : colorB}
           stroke="#000"
           strokeWidth="0.5"
         />
       );
+    }
+
+    // after assembly steps, reveal translated patches across the same hex grid used by rotate120
+    if (demoStep > 3) {
+      const hexToShow = demoStep - 3;
+      const s = RADIUS * 1.5;
+      const stepX = s;
+      const stepY = s * Math.sqrt(3) * 2;
+      const demoRange = 8;
+      const centers: {cx:number, cy:number}[] = [];
+      for (let row = -demoRange; row <= demoRange; row++) {
+        for (let col = -demoRange; col <= demoRange; col++) {
+          if (row === 0 && col === 0) continue;
+          const hexCX = col * stepX;
+          const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
+          centers.push({ cx: hexCX, cy: hexCY });
+        }
+      }
+      centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
+
+      const reveal = Math.min(hexToShow, centers.length);
+      // compute centroid of piece offsets so we can place the patch
+      const avgOx = (pieceOffsets[0][0] + pieceOffsets[1][0] + pieceOffsets[2][0]) / 3;
+      const avgOy = (pieceOffsets[0][1] + pieceOffsets[1][1] + pieceOffsets[2][1]) / 3;
+      for (let i = 0; i < reveal; i++) {
+        const { cx, cy } = centers[i];
+        for (let k = 0; k < 3; k++) {
+          const ox = pieceOffsets[k][0];
+          const oy = pieceOffsets[k][1];
+          const tx = (cx + (ox - avgOx));
+          const ty = cy + (oy - avgOy);
+          demoTiles.push(
+            <path
+              key={`hex-demo-fill-${i}-${k}`}
+              d={tilePathData}
+              transform={`translate(${tx}, ${ty})`}
+              fill={k % 2 === 0 ? colorA : colorB}
+              stroke="#000"
+              strokeWidth="0.5"
+            />
+          );
+        }
+      }
     }
   }
   return <>{demoTiles}</>;
