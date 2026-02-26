@@ -292,65 +292,19 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       );
     }
 
-    // after assembly steps, reveal translated patches across grid
-    // Compute a safe tiling basis from the assembled 3-piece patch bounding box
+    // after assembly steps, reveal translated patches across the same hex grid used by rotate120
     if (demoStep > 3) {
       const hexToShow = demoStep - 3;
-
-      // Build transformed vertices of the assembled patch (centered at origin)
-      const transformedVerts: Point[] = [];
-      for (let k = 0; k < 3; k++) {
-        const ox = pieceOffsets[k][0];
-        const oy = pieceOffsets[k][1];
-        for (let v = 0; v < baseVertsT.length; v++) {
-          const vx = baseVertsT[v].x - pivotT.x + ox;
-          const vy = baseVertsT[v].y - pivotT.y + oy;
-          transformedVerts.push({ x: vx, y: vy });
-        }
-      }
-
-      // If degenerate, fall back to existing coarse spacing
+      const s = RADIUS * 1.5;
+      const stepX = s;
+      const stepY = s * Math.sqrt(3) * 2;
       const demoRange = 8;
-      if (transformedVerts.length === 0) return <>{demoTiles}</>;
-
-      // Use pieceOffsets differences as basis directions
-      const b0x = pieceOffsets[1][0] - pieceOffsets[0][0];
-      const b0y = pieceOffsets[1][1] - pieceOffsets[0][1];
-      const b1x = pieceOffsets[2][0] - pieceOffsets[0][0];
-      const b1y = pieceOffsets[2][1] - pieceOffsets[0][1];
-      const b0len = Math.sqrt(b0x * b0x + b0y * b0y) || 1;
-      const b1len = Math.sqrt(b1x * b1x + b1y * b1y) || 1;
-      const ux = b0x / b0len, uy = b0y / b0len;
-      const vx = b1x / b1len, vy = b1y / b1len;
-
-      // Project transformed vertices onto basis to measure extents
-      let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
-      for (let i = 0; i < transformedVerts.length; i++) {
-        const p = transformedVerts[i];
-        const du = p.x * ux + p.y * uy;
-        const dv = p.x * vx + p.y * vy;
-        if (du < minU) minU = du;
-        if (du > maxU) maxU = du;
-        if (dv < minV) minV = dv;
-        if (dv > maxV) maxV = dv;
-      }
-
-      // Use exact extents so patches abut tightly (no gap)
-      const margin = 1.0;
-      let stepU = (maxU - minU) * margin;
-      let stepV = (maxV - minV) * margin;
-
-      // Fallback if computed steps are too small
-      if (!isFinite(stepU) || stepU < 1e-6) stepU = 3 * RADIUS;
-      if (!isFinite(stepV) || stepV < 1e-6) stepV = 3 * RADIUS;
-
-      // Generate centers in basis coordinates
       const centers: {cx:number, cy:number}[] = [];
       for (let row = -demoRange; row <= demoRange; row++) {
         for (let col = -demoRange; col <= demoRange; col++) {
           if (row === 0 && col === 0) continue;
-          const hexCX = col * ux * stepU + row * vx * stepV;
-          const hexCY = col * uy * stepU + row * vy * stepV;
+          const hexCX = col * stepX;
+          const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
           centers.push({ cx: hexCX, cy: hexCY });
         }
       }
