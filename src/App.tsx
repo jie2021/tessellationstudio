@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 import SquareShape, { applySquareEdit, Point as SquarePoint, buildSquareDemoTiles, renderSquareControls, startSquareDemo, stopSquareDemo, nextSquareStep, prevSquareStep, getSquareDemoText as squareGetDemoText } from './Square';
-import HexagonShape, { applyHexagonEdit, renderHexagonControls, startHexagonDemo, stopHexagonDemo, nextHexagonStep, prevHexagonStep, getHexagonDemoText, buildHexagonDemoTiles } from './Hexagon';
+import HexagonShape, { applyHexagonEdit, renderHexagonControls, startHexagonDemo, stopHexagonDemo, nextHexagonStep, prevHexagonStep, getHexagonDemoText } from './Hexagon';
 import TriangleShape, { initTrianglePaths, applyTriangleEdit, Point as TriPoint, startTriangleDemo, stopTriangleDemo, renderTriangleControls, nextTriangleStep, prevTriangleStep, getTriangleDemoText, triangleAutoAdvance } from './Triangle';
 
 // --- Types ---

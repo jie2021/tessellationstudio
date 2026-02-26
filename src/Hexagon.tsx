@@ -133,213 +133,62 @@ interface Props {
 }
 
 export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 12, transformType, demoMode = false, demoStep = 0, demoCenters = [] }: Props) {
-  const tiles: React.ReactNode[] = [];
-  let stepX = RADIUS * 1.5;
-  let stepY = Math.sqrt(3) * RADIUS;
+  // For background, if not in demo mode, show a large patch of tiles to illustrate the pattern
+  if(!demoMode){
+      demoStep = 80;
+  }
+  const demoTiles: React.ReactNode[] = [];
+  // Recompute base vertices local to tile
+  const baseVerts: { x: number; y: number }[] = [];
+  const startAngle = 0;
+  for (let i = 0; i < 6; i++) {
+    const angle = startAngle + (i * 2 * Math.PI) / 6;
+    baseVerts.push({ x: CENTER + RADIUS * Math.cos(angle), y: CENTER + RADIUS * Math.sin(angle) });
+  }
+  const pivot = transformType === 'rotate120' ? baseVerts[5] : baseVerts[0];
 
-  // For rotate120 demo mode and expectations, use the same hex-grid spacing
-  // as the triangle/hex demo (s = R * sqrt(3)). This ensures background
-  // tiling aligns with the demo's translation centers.
-  if (transformType === 'rotate120') {
-    const s = RADIUS * Math.sqrt(3);
-    stepX = s * 1.5;
-    stepY = s * Math.sqrt(3);
+  // center patch assembly at origin
+  const tx0 = 0 - pivot.x;
+  const ty0 = 0 - pivot.y;
+
+  // show up to three rotated pieces
+  const piecesToShow = Math.min(3, Math.max(1, demoStep));
+  for (let k = 0; k < piecesToShow; k++) {
+    const angle = k * 120; // clockwise rotations
+    demoTiles.push(
+      <path
+        key={`hex-demo-center-${k}`}
+        d={tilePathData}
+        transform={`translate(${tx0}, ${ty0}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
+        fill={k % 2 === 0 ? colorA : colorB}
+        stroke="#000"
+        strokeWidth="0.5"
+      />
+    );
   }
 
-  for (let r = -range; r < range; r++) {
-    for (let c = -range; c < range; c++) {
-      const worldX = c * stepX;
-      const worldY = r * stepY + (Math.abs(c) % 2 !== 0 ? stepY / 2 : 0);
-      const rot = ((r + c) % 6) * 60;
-      const tileFill = (((r + Math.abs(c)) % 3 + 3) % 3) === 0 ? colorA : colorB;
-      // Build a 3-piece patch: original, rotated 120°, rotated 240° around the first vertex
-      // Determine the pivot (first base vertex) from the tile's local coordinates
-      const pivotX = CENTER + RADIUS * Math.cos(0); // placeholder; we'll compute accurate pivot below
-      const pivotY = CENTER + RADIUS * Math.sin(0);
-
-      // Compute base vertices local to this tile (matching App.getBaseVertices for hexagon)
-      const baseVerts: { x: number; y: number }[] = [];
-      const startAngle = 0;
-      for (let i = 0; i < 6; i++) {
-        const angle = startAngle + (i * 2 * Math.PI) / 6;
-        baseVerts.push({ x: CENTER + RADIUS * Math.cos(angle), y: CENTER + RADIUS * Math.sin(angle) });
-      }
-      const realPivot = transformType === 'rotate120' ? baseVerts[5] : baseVerts[0];
-
-      tiles.push(
-        <g key={`hex-${r}-${c}`} transform={`translate(${worldX - CENTER}, ${worldY - CENTER}) rotate(${rot}, ${CENTER}, ${CENTER})`}>
-          <path d={tilePathData} fill={tileFill} stroke="#000" strokeWidth="0.5" />
-          <path d={tilePathData} transform={`rotate(120 ${realPivot.x} ${realPivot.y})`} fill={tileFill} stroke="#000" strokeWidth="0.5" />
-          <path d={tilePathData} transform={`rotate(240 ${realPivot.x} ${realPivot.y})`} fill={tileFill} stroke="#000" strokeWidth="0.5" />
-          {transformType === 'rotate120' && (
-            <circle cx={realPivot.x} cy={realPivot.y} r={6} fill="#ef4444" stroke="#fff" strokeWidth={2} />
-          )}
-        </g>
-      );
-    }
+  // pivot marker during rotation explanation steps
+  if (demoStep >= 1 && demoStep <= 3) {
+    const pivotWorldX = pivot.x + tx0;
+    const pivotWorldY = pivot.y + ty0;
+    demoTiles.push(
+      <g key={`hex-demo-pivot`} pointerEvents="none">
+        <circle cx={pivotWorldX} cy={pivotWorldY} r={8} fill="#ef4444" stroke="#fff" strokeWidth={2} />
+        <circle cx={pivotWorldX} cy={pivotWorldY} r={4} fill="#fff" />
+        <text x={pivotWorldX + 12} y={pivotWorldY + 4} fontSize={12} fill="#111" fontWeight={600}>기준점</text>
+      </g>
+    );
   }
 
-  // Demo rendering: when demoMode is active, build explanatory tiles centered around pivot
-  if (demoMode) {
-    const demoTiles: React.ReactNode[] = [];
-    // Recompute base vertices local to tile
-    const baseVerts: { x: number; y: number }[] = [];
-    const startAngle = 0;
-    for (let i = 0; i < 6; i++) {
-      const angle = startAngle + (i * 2 * Math.PI) / 6;
-      baseVerts.push({ x: CENTER + RADIUS * Math.cos(angle), y: CENTER + RADIUS * Math.sin(angle) });
-    }
-    const pivot = transformType === 'rotate120' ? baseVerts[5] : baseVerts[0];
-
-    // center patch assembly at origin
-    const tx0 = 0 - pivot.x;
-    const ty0 = 0 - pivot.y;
-
-    // show up to three rotated pieces
-    const piecesToShow = Math.min(3, Math.max(1, demoStep));
-    for (let k = 0; k < piecesToShow; k++) {
-      const angle = k * 120; // clockwise rotations
-      demoTiles.push(
-        <path
-          key={`hex-demo-center-${k}`}
-          d={tilePathData}
-          transform={`translate(${tx0}, ${ty0}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
-          fill={k % 2 === 0 ? colorA : colorB}
-          stroke="#000"
-          strokeWidth="0.5"
-        />
-      );
-    }
-
-    // pivot marker during rotation explanation steps
-    if (demoStep >= 1 && demoStep <= 3) {
-      const pivotWorldX = pivot.x + tx0;
-      const pivotWorldY = pivot.y + ty0;
-      demoTiles.push(
-        <g key={`hex-demo-pivot`} pointerEvents="none">
-          <circle cx={pivotWorldX} cy={pivotWorldY} r={8} fill="#ef4444" stroke="#fff" strokeWidth={2} />
-          <circle cx={pivotWorldX} cy={pivotWorldY} r={4} fill="#fff" />
-          <text x={pivotWorldX + 12} y={pivotWorldY + 4} fontSize={12} fill="#111" fontWeight={600}>기준점</text>
-        </g>
-      );
-    }
-
-    // After assembling the 3-piece patch, reveal translations to fill surrounding tiles
-    if (demoStep > 3) {
-      const hexToShow = demoStep - 3;
-      // Build hex grid centers (triangle-style) and pick nearest N
-      const s = RADIUS * 1.5;
-      const stepX = s ;
-      const stepY = s * Math.sqrt(3)*2;
-      const demoRange = 4;
-      const centers: {cx:number, cy:number}[] = [];
-      for (let row = -demoRange; row <= demoRange; row++) {
-        for (let col = -demoRange; col <= demoRange; col++) {
-          if (row === 0 && col === 0) continue;
-          const hexCX = col * stepX;
-          const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
-          centers.push({ cx: hexCX, cy: hexCY });
-        }
-      }
-      centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
-
-      const reveal = Math.min(hexToShow, centers.length);
-      for (let i = 0; i < reveal; i++) {
-        const { cx, cy } = centers[i];
-        const tx = cx - pivot.x;
-        const ty = cy - pivot.y;
-        // render the assembled 3-piece patch translated to center
-        for (let k = 0; k < 3; k++) {
-          const angle = k * 120;
-          demoTiles.push(
-            <path
-              key={`hex-demo-fill-${i}-${k}`}
-              d={tilePathData}
-              transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
-              fill={k % 2 === 0 ? colorA : colorB}
-              stroke="#000"
-              strokeWidth="0.5"
-            />
-          );
-        }
-      }
-    }
-
-    return <>{demoTiles}</>;
-  }
-
-  return <>{tiles}</>;
-}
-
-// Demo helpers for Hexagon (mirror Triangle/Square patterns)
-export function buildHexagonDemoTiles(params: {
-  hexDemoMode: boolean;
-  hexDemoStep: number;
-  tilePathData: string;
-  baseVertices: { x:number; y:number }[];
-  colorA: string;
-  colorB: string;
-  transformType: 'rotate120' | 'translate' | 'glide';
-  RADIUS: number;
-}) : React.ReactNode[] | null {
-  const { hexDemoMode, hexDemoStep, tilePathData, baseVertices, colorA, colorB, transformType, RADIUS } = params;
-  if (!hexDemoMode) return null;
-  if (!baseVertices || baseVertices.length === 0) return null;
-
-  // pivot: use vertex 6 (index 5) only for rotate120, otherwise use vertex 1 (index 0)
-  const pivot = transformType === 'rotate120' ? baseVertices[5] : baseVertices[0];
-
-  // compute base bounding box
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  if (transformType === 'translate' || transformType === 'glide') {
-    for (const v of baseVertices) { if (v.x < minX) minX = v.x; if (v.y < minY) minY = v.y; if (v.x > maxX) maxX = v.x; if (v.y > maxY) maxY = v.y; }
-  } else {
-    for (let k = 0; k < 3; k++) {
-      const angle = k * 120;
-      const a = (angle * Math.PI) / 180;
-      for (const v of baseVertices) {
-        const dx = v.x - pivot.x; const dy = v.y - pivot.y;
-        const rx = Math.cos(a) * dx - Math.sin(a) * dy;
-        const ry = Math.sin(a) * dx + Math.cos(a) * dy;
-        const x = pivot.x + rx; const y = pivot.y + ry;
-        if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y;
-      }
-    }
-  }
-
-  const width = (isFinite(maxX) && isFinite(minX)) ? Math.max(1, maxX - minX) : RADIUS * 1.5;
-  const height = (isFinite(maxY) && isFinite(minY)) ? Math.max(1, maxY - minY) : RADIUS * Math.sqrt(3);
-  const baseW = Math.max(1, maxX - minX);
-  const baseH = Math.max(1, maxY - minY);
-
-  const arr: React.ReactNode[] = [];
-
-  if (transformType === 'translate' || transformType === 'glide') {
-    const offsets = [] as {dx:number, dy:number, fill:string}[];
-    offsets.push({ dx: 0, dy: 0, fill: colorA });
-    if (hexDemoStep >= 2) offsets.push({ dx: 0, dy: -height, fill: colorB });
-    if (hexDemoStep >= 3) offsets.push({ dx: -width, dy: -height, fill: colorA });
-
-    for (let i = 0; i < offsets.length; i++) {
-      const p = offsets[i];
-      arr.push(<path key={`hexdemo-center-${i}`} d={tilePathData} transform={`translate(${p.dx}, ${p.dy})`} fill={p.fill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />);
-    }
-  } else {
-    const n = Math.min(3, Math.max(1, hexDemoStep));
-    for (let k = 0; k < n; k++) {
-      const angle = k * 120;
-      const fill = (k % 2 === 0) ? colorA : colorB;
-      arr.push(<path key={`hexdemo-center-${k}`} d={tilePathData} transform={`rotate(${angle}, ${pivot.x}, ${pivot.y})`} fill={fill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />);
-    }
-  }
-
-  if (hexDemoStep > 3) {
+  // After assembling the 3-piece patch, reveal translations to fill surrounding tiles
+  if (demoStep > 3) {
+    const hexToShow = demoStep - 3;
+    // Build hex grid centers (triangle-style) and pick nearest N
+    const s = RADIUS * 1.5;
+    const stepX = s ;
+    const stepY = s * Math.sqrt(3)*2;
+    const demoRange = 8;
     const centers: {cx:number, cy:number}[] = [];
-    // Use triangle-style hex grid centers for translation fill (same as Triangle)
-    const demoRange = 4;
-    const s = RADIUS * Math.sqrt(3);
-    const stepX = s * 1.5;
-    const stepY = s * Math.sqrt(3);
     for (let row = -demoRange; row <= demoRange; row++) {
       for (let col = -demoRange; col <= demoRange; col++) {
         if (row === 0 && col === 0) continue;
@@ -350,28 +199,32 @@ export function buildHexagonDemoTiles(params: {
     }
     centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
 
-    const requested = hexDemoStep - 3;
-    const reveal = (requested >= centers.length) ? centers.length : Math.min(centers.length, requested);
+    const reveal = Math.min(hexToShow, centers.length);
     for (let i = 0; i < reveal; i++) {
       const { cx, cy } = centers[i];
+      const tx = cx - pivot.x;
+      const ty = cy - pivot.y;
+      // render the assembled 3-piece patch translated to center
       for (let k = 0; k < 3; k++) {
         const angle = k * 120;
-        const fill = (k % 2 === 0) ? colorA : colorB;
-        arr.push(<path key={`hexdemo-${i}-${k}`} d={tilePathData} transform={`translate(${cx - pivot.x}, ${cy - pivot.y}) rotate(${angle}, ${pivot.x}, ${pivot.y})`} fill={fill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />);
+        demoTiles.push(
+          <path
+            key={`hex-demo-fill-${i}-${k}`}
+            d={tilePathData}
+            transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
+            fill={k % 2 === 0 ? colorA : colorB}
+            stroke="#000"
+            strokeWidth="0.5"
+          />
+        );
       }
     }
   }
 
-  arr.push(
-    <g key="hexdemo-pivot" pointerEvents="none">
-      <circle cx={pivot.x} cy={pivot.y} r={8} fill="#ef4444" stroke="#fff" strokeWidth={2} />
-      <circle cx={pivot.x} cy={pivot.y} r={4} fill="#fff" />
-      <text x={pivot.x + 12} y={pivot.y + 4} fontSize={12} fill="#111" fontWeight={600}>기준점</text>
-    </g>
-  );
-
-  return arr;
+  return <>{demoTiles}</>;
 }
+
+// (removed) buildHexagonDemoTiles: unused helper removed to reduce bundle size
 
 export function startHexagonDemo(params: {
   setShapeType: (s: 'triangle' | 'square' | 'hexagon') => void;
