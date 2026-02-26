@@ -242,77 +242,142 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       }
     }
   }else if (transformType === 'translate' ) {
-    // For translation: do NOT assemble a patch — simply tile the base
-    // shape by translating it horizontally and vertically by the
-    // base shape size (axis-aligned grid). Always show the base tile
-    // then reveal neighboring translations as demoStep increases.
-    // Recompute base vertices to measure base width/height
-    if(!demoMode){
-      demoStep = 240;
-    }
+    // Build a 3-piece patch by translating the base tile twice along
+    // a chosen edge-direction, then tile that 3-piece patch across the
+    // plane using the same spacing as rotate120 so the motif matches.
+    if (!demoMode) demoStep = 80;
+
+    // base vertices (centered at CENTER)
     const baseVertsT: { x: number; y: number }[] = [];
     const startAngleT = 0;
     for (let i = 0; i < 6; i++) {
       const angle = startAngleT + (i * 2 * Math.PI) / 6;
       baseVertsT.push({ x: CENTER + RADIUS * Math.cos(angle), y: CENTER + RADIUS * Math.sin(angle) });
     }
-    const xs = baseVertsT.map(v => v.x);
-    const ys = baseVertsT.map(v => v.y);
-    const baseW = Math.max(...xs) - Math.min(...xs);
-    const baseH = Math.max(...ys) - Math.min(...ys);
+    const pivotT = baseVertsT[5];
 
-    // always show center tile
-    demoTiles.push(
-      <path
-        key={`hex-demo-center`}
-        d={tilePathData}
-        transform={`translate(0, 0)`}
-        fill={colorA}
-        stroke="#000"
-        strokeWidth="0.5"
-      />
-    );
+    // derive a translation vector from the midpoint of edge 0 (center-to-center)
+    const centerX = CENTER;
+    const centerY = CENTER;
+    const m0x = (baseVertsT[0].x + baseVertsT[1].x) * 0.5;
+    const m0y = (baseVertsT[0].y + baseVertsT[1].y) * 0.5;
+    const m1x = (baseVertsT[1].x + baseVertsT[2].x) * 0.5;
+    const m1y = (baseVertsT[1].y + baseVertsT[2].y) * 0.5;
+    const v0x = 2 * (m0x - centerX);
+    const v0y = 2 * (m0y - centerY);
+    const v1x = 2 * (m1x - centerX);
+    const v1y = 2 * (m1y - centerY);
 
-    if (demoStep > 1) {
-      const hexToShow = demoStep - 1;
-      // build centers using two basis vectors aligned with opposite-edge
-      // directions. compute midpoints of edge 0 and edge 1, then use
-      // twice those vectors as center-to-center offsets
-      const centerX = CENTER;
-      const centerY = CENTER;
-      const m0x = (baseVertsT[0].x + baseVertsT[1].x) * 0.5;
-      const m0y = (baseVertsT[0].y + baseVertsT[1].y) * 0.5;
-      const m1x = (baseVertsT[1].x + baseVertsT[2].x) * 0.5;
-      const m1y = (baseVertsT[1].y + baseVertsT[2].y) * 0.5;
-      const v0x = 2 * (m0x - centerX);
-      const v0y = 2 * (m0y - centerY);
-      const v1x = 2 * (m1x - centerX);
-      const v1y = 2 * (m1y - centerY);
+    // piece offsets: base, translate along base-edge, translate along CCW-adjacent edge
+    const pieceOffsets = [ [0,0], [v0x, v0y], [v1x, v1y] ];
 
-      const demoRange = 48;
+    // show assembly at origin using centroid alignment so it matches tiled patches
+    const avgOx = (pieceOffsets[0][0] + pieceOffsets[1][0] + pieceOffsets[2][0]) / 3;
+    const avgOy = (pieceOffsets[0][1] + pieceOffsets[1][1] + pieceOffsets[2][1]) / 3;
+    const piecesToShow = Math.min(3, Math.max(1, demoStep));
+    for (let k = 0; k < piecesToShow; k++) {
+      const ox = pieceOffsets[k][0];
+      const oy = pieceOffsets[k][1];
+      const tx = -avgOx + ox;
+      const ty = -avgOy + oy;
+      demoTiles.push(
+        <path
+          key={`hex-demo-center-${k}`}
+          d={tilePathData}
+          transform={`translate(${tx}, ${ty})`}
+          fill={k % 2 === 0 ? colorA : colorB}
+          stroke="#000"
+          strokeWidth="0.5"
+        />
+      );
+    }
+
+    // after assembly steps, reveal translated patches across grid
+    // Compute a safe tiling basis from the assembled 3-piece patch bounding box
+    if (demoStep > 3) {
+      const hexToShow = demoStep - 3;
+
+      // Build transformed vertices of the assembled patch (centered at origin)
+      const transformedVerts: Point[] = [];
+      for (let k = 0; k < 3; k++) {
+        const ox = pieceOffsets[k][0];
+        const oy = pieceOffsets[k][1];
+        for (let v = 0; v < baseVertsT.length; v++) {
+          const vx = baseVertsT[v].x - pivotT.x + ox;
+          const vy = baseVertsT[v].y - pivotT.y + oy;
+          transformedVerts.push({ x: vx, y: vy });
+        }
+      }
+
+      // If degenerate, fall back to existing coarse spacing
+      const demoRange = 8;
+      if (transformedVerts.length === 0) return <>{demoTiles}</>;
+
+      // Use pieceOffsets differences as basis directions
+      const b0x = pieceOffsets[1][0] - pieceOffsets[0][0];
+      const b0y = pieceOffsets[1][1] - pieceOffsets[0][1];
+      const b1x = pieceOffsets[2][0] - pieceOffsets[0][0];
+      const b1y = pieceOffsets[2][1] - pieceOffsets[0][1];
+      const b0len = Math.sqrt(b0x * b0x + b0y * b0y) || 1;
+      const b1len = Math.sqrt(b1x * b1x + b1y * b1y) || 1;
+      const ux = b0x / b0len, uy = b0y / b0len;
+      const vx = b1x / b1len, vy = b1y / b1len;
+
+      // Project transformed vertices onto basis to measure extents
+      let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
+      for (let i = 0; i < transformedVerts.length; i++) {
+        const p = transformedVerts[i];
+        const du = p.x * ux + p.y * uy;
+        const dv = p.x * vx + p.y * vy;
+        if (du < minU) minU = du;
+        if (du > maxU) maxU = du;
+        if (dv < minV) minV = dv;
+        if (dv > maxV) maxV = dv;
+      }
+
+      // Use exact extents so patches abut tightly (no gap)
+      const margin = 1.0;
+      let stepU = (maxU - minU) * margin;
+      let stepV = (maxV - minV) * margin;
+
+      // Fallback if computed steps are too small
+      if (!isFinite(stepU) || stepU < 1e-6) stepU = 3 * RADIUS;
+      if (!isFinite(stepV) || stepV < 1e-6) stepV = 3 * RADIUS;
+
+      // Generate centers in basis coordinates
       const centers: {cx:number, cy:number}[] = [];
-      for (let r = -demoRange; r <= demoRange; r++) {
-        for (let c = -demoRange; c <= demoRange; c++) {
-          if (r === 0 && c === 0) continue;
-          const cx = c * v0x + r * v1x;
-          const cy = c * v0y + r * v1y;
-          centers.push({ cx, cy });
+      for (let row = -demoRange; row <= demoRange; row++) {
+        for (let col = -demoRange; col <= demoRange; col++) {
+          if (row === 0 && col === 0) continue;
+          const hexCX = col * ux * stepU + row * vx * stepV;
+          const hexCY = col * uy * stepU + row * vy * stepV;
+          centers.push({ cx: hexCX, cy: hexCY });
         }
       }
       centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
+
       const reveal = Math.min(hexToShow, centers.length);
+      // compute centroid of piece offsets so we can place the patch
+      const avgOx = (pieceOffsets[0][0] + pieceOffsets[1][0] + pieceOffsets[2][0]) / 3;
+      const avgOy = (pieceOffsets[0][1] + pieceOffsets[1][1] + pieceOffsets[2][1]) / 3;
       for (let i = 0; i < reveal; i++) {
         const { cx, cy } = centers[i];
-        demoTiles.push(
-          <path
-            key={`hex-demo-fill-${i}`}
-            d={tilePathData}
-            transform={`translate(${cx}, ${cy})`}
-            fill={i % 2 === 0 ? colorA : colorB}
-            stroke="#000"
-            strokeWidth="0.5"
-          />
-        );
+        for (let k = 0; k < 3; k++) {
+          const ox = pieceOffsets[k][0];
+          const oy = pieceOffsets[k][1];
+          const tx = (cx + (ox - avgOx));
+          const ty = cy + (oy - avgOy);
+          demoTiles.push(
+            <path
+              key={`hex-demo-fill-${i}-${k}`}
+              d={tilePathData}
+              transform={`translate(${tx}, ${ty})`}
+              fill={k % 2 === 0 ? colorA : colorB}
+              stroke="#000"
+              strokeWidth="0.5"
+            />
+          );
+        }
       }
     }
   }else if (transformType === 'glide') {
@@ -384,10 +449,11 @@ export function startHexagonDemo(params: {
     const m0y = (bv[0].y + bv[1].y) * 0.5;
     const m1x = (bv[1].x + bv[2].x) * 0.5;
     const m1y = (bv[1].y + bv[2].y) * 0.5;
-    const v0x = 2 * (m0x - centerX);
-    const v0y = 2 * (m0y - centerY);
-    const v1x = 2 * (m1x - centerX);
-    const v1y = 2 * (m1y - centerY);
+    // scale basis vectors by 3 so centers are spaced by full patch size
+    const v0x = 3 * 2 * (m0x - centerX);
+    const v0y = 3 * 2 * (m0y - centerY);
+    const v1x = 3 * 2 * (m1x - centerX);
+    const v1y = 3 * 2 * (m1y - centerY);
     const demoRange = 4;
     for (let row = -demoRange; row <= demoRange; row++) {
       for (let col = -demoRange; col <= demoRange; col++) {
