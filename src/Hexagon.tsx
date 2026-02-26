@@ -387,7 +387,9 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
     // use centers[0] as the reference tile (#1)
     const refCol = centers[0]?.col ?? 0;
     const refRow = centers[0]?.row ?? 0;
-    for (let i = 0; i < centers.length; i++) {
+    // If in demo/explain mode, only render centers up to demoStep (1-based count).
+    const centersCount = (demoMode && typeof demoStep === 'number' && demoStep > 0) ? Math.min(centers.length, demoStep) : centers.length;
+    for (let i = 0; i < centersCount; i++) {
       const { cx, cy, col, row } = centers[i];
       const tx = cx - CENTER;
       const ty = cy - CENTER;
