@@ -38,13 +38,15 @@ export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint:
     if ([1,3,5].includes(ei)) paired = (ei + 3) % 6; else return newPaths;
   } else {
     // glide mode: use requested pairing
-    // 1<->4 -> indices 0<->3 : translation
-    // 2<->3 -> indices 1<->2 : glide reflection
-    // 5<->6 -> indices 4<->5 : glide reflection
-    if ([0,1,4].includes(ei)) {
-      if (ei === 0) { paired = 3; mappingMode = 'translate'; }
-      else if (ei === 1) { paired = 2; mappingMode = 'glide'; }
-      else if (ei === 4) { paired = 5; mappingMode = 'glide'; }
+    // New pairing (visible edge numbers):
+    // 2<->5 -> indices 1<->4 : translation
+    // 3<->4 -> indices 2<->3 : glide reflection
+    // 6<->1 -> indices 5<->0 : glide reflection
+    // expose interactive controls on edges 2,3,6 (indices 1,2,5)
+    if ([1,2,5].includes(ei)) {
+      if (ei === 1) { paired = 4; mappingMode = 'translate'; }
+      else if (ei === 2) { paired = 3; mappingMode = 'glide'; }
+      else if (ei === 5) { paired = 0; mappingMode = 'glide'; }
     } else return newPaths;
   }
 
@@ -107,9 +109,9 @@ export function renderHexagonControls(params: {
   // - rotate120: odd edges (1,3,5) are interactive; pairs are even edges (0,2,4)
   // - translate/glide: interactive edges are 1,3,5 and paired are opposite edges (i+3)%6
 
-  // interactive edges vary by transform mode. For glide expose controls for edges 0,1,4
-  // (user-visible edges 1,2,5) so pairs become 0<->3,1<->2,4<->5
-  const interactiveEdges = transformType === 'glide' ? [0,1,4] : [1,3,5];
+  // interactive edges vary by transform mode. For glide expose controls for edges 1,2,5
+  // (user-visible edges 2,3,6) so pairs become 2<->5,3<->4,6<->1
+  const interactiveEdges = transformType === 'glide' ? [1,2,5] : [1,3,5];
   const isInteractiveEdge = interactiveEdges.includes(ei);
 
   return (
