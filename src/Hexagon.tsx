@@ -400,17 +400,40 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       const dy0 = row - refRow;
       const stepsForColor = Math.round((Math.abs(dx0) + Math.abs(dy0) + Math.abs(dx0 + dy0)) / 2);
       const bgFill = (stepsForColor % 2 === 1) ? colorA : colorB;
-      demoTiles.push(
-        <path
-          key={`hex-demo-glide-bg-${i}`}
-          d={tilePathData}
-          transform={`translate(${tx}, ${ty})`}
-          fill={bgFill}
-          opacity={0.5}
-          stroke="#000"
-          strokeWidth="0.5"
-        />
-      );
+      // decide whether this column should be mirrored: odd columns (relative to ref) are mirrored
+      const colOffset = col - refCol;
+      const shouldMirror = Math.abs(colOffset) % 2 === 1;
+      if (!shouldMirror) {
+        demoTiles.push(
+          <path
+            key={`hex-demo-glide-bg-${i}`}
+            d={tilePathData}
+            transform={`translate(${tx}, ${ty})`}
+            fill={bgFill}
+            opacity={0.5}
+            stroke="#000"
+            strokeWidth="0.5"
+          />
+        );
+      } else {
+        // mirror horizontally about the tile center (vertical line at x = cx)
+        // mapping derived so tile local point (x,y) -> (-x + (cx + CENTER + shiftX), y + cy - CENTER)
+        // add a small rightward offset of RADIUS/3 for mirrored (odd) columns
+        // achieved with: translate(-(cx + CENTER + shiftX), cy - CENTER) scale(-1,1)
+        const shiftX = RADIUS / 3;
+        const mirrorTransform = `translate(${-(cx + CENTER - shiftX)}, ${cy - CENTER}) scale(-1,1)`;
+        demoTiles.push(
+          <path
+            key={`hex-demo-glide-bg-${i}`}
+            d={tilePathData}
+            transform={mirrorTransform}
+            fill={bgFill}
+            opacity={0.5}
+            stroke="#000"
+            strokeWidth="0.5"
+          />
+        );
+      }
       // numeric label at tile center (render order index) + distance to tile #1 (pixels)
       const refCx = centers[0]?.cx ?? cx;
       const refCy = centers[0]?.cy ?? cy;
