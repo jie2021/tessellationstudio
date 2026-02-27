@@ -397,8 +397,10 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       if (demoMode && typeof demoStep === 'number' && demoStep > 0) {
         if (demoStep >= 1 && demoStep <= 4) {
           const mapping = [0, 2, 3, 5]; // one-based 1,3,4,6 -> zero-based indices
-          const idx = mapping[demoStep - 1];
-          return idx < centers.length ? [centers[idx]] : [];
+          const indices = mapping.slice(0, demoStep).filter(i => i < centers.length);
+          // preserve order and return the mapped centers cumulatively so earlier
+          // revealed tiles remain visible as steps advance
+          return indices.map(i => centers[i]);
         }
         const centersCount = Math.min(centers.length, demoStep);
         return centers.slice(0, centersCount);
