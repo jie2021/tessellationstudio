@@ -389,10 +389,25 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
     // use centers[0] as the reference tile (#1)
     const refCol = centers[0]?.col ?? 0;
     const refRow = centers[0]?.row ?? 0;
-    // If in demo/explain mode, only render centers up to demoStep (1-based count).
-    const centersCount = (demoMode && typeof demoStep === 'number' && demoStep > 0) ? Math.min(centers.length, demoStep) : centers.length;
-    for (let i = 0; i < centersCount; i++) {
-      const { cx, cy, col, row } = centers[i];
+    // decide which centers to render in demoMode. For glide demo we want a
+    // custom reveal sequence: show tiles numbered 1,3,4,6 at demo steps 1..4
+    // respectively (these are one-based indices into the distance-sorted
+    // `centers` array). After step 4, fall back to revealing the first N.
+    const selectedCenters: {cx:number, cy:number, col:number, row:number}[] = (() => {
+      if (demoMode && typeof demoStep === 'number' && demoStep > 0) {
+        if (demoStep >= 1 && demoStep <= 4) {
+          const mapping = [0, 2, 3, 5]; // one-based 1,3,4,6 -> zero-based indices
+          const idx = mapping[demoStep - 1];
+          return idx < centers.length ? [centers[idx]] : [];
+        }
+        const centersCount = Math.min(centers.length, demoStep);
+        return centers.slice(0, centersCount);
+      }
+      return centers;
+    })();
+
+    for (let i = 0; i < selectedCenters.length; i++) {
+      const { cx, cy, col, row } = selectedCenters[i];
       const tx = cx - CENTER;
       const ty = cy - CENTER;
       // compute hex-grid step distance to reference and use its parity for color
