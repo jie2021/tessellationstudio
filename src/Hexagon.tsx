@@ -353,7 +353,7 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       }
     }
   }else if (transformType === 'glide') {
-    if (!demoMode) demoStep = 80;
+    if (!demoMode) demoStep = 480;
     // 기본 조각으로 평행 이동만 해서 배경을 모두 채웁니다.
     // Compute lattice centers using opposite-edge directions (same as demo starter)
     const centerX = 0;
@@ -410,7 +410,7 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
             d={tilePathData}
             transform={`translate(${tx}, ${ty})`}
             fill={bgFill}
-            opacity={0.5}
+            opacity={1}
             stroke="#000"
             strokeWidth="0.5"
           />
@@ -428,35 +428,13 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
             d={tilePathData}
             transform={mirrorTransform}
             fill={bgFill}
-            opacity={0.5}
+            opacity={1}
             stroke="#000"
             strokeWidth="0.5"
           />
         );
       }
-      // numeric label at tile center (render order index) + distance to tile #1 (pixels)
-      const refCx = centers[0]?.cx ?? cx;
-      const refCy = centers[0]?.cy ?? cy;
-      const dist = Math.hypot(cx - refCx, cy - refCy);
-      const distLabel = Math.round(dist);
-      // compute hex-grid step distance using axial->cube coords
-      const dx = col - refCol;
-      const dy = row - refRow;
-      const steps = Math.round((Math.abs(dx) + Math.abs(dy) + Math.abs(dx + dy)) / 2);
-      demoTiles.push(
-        <text
-          key={`hex-demo-glide-bg-label-${i}`}
-          x={cx}
-          y={cy + Math.max(8, RADIUS * 0.06)}
-          fontSize={Math.max(10, Math.round(RADIUS * 0.12))}
-          fill="#111"
-          fontWeight={700}
-          textAnchor="middle"
-          pointerEvents="none"
-          stroke="#fff"
-          strokeWidth={0.6}
-        >{`${i + 1} (${distLabel}) [${steps}칸]`}</text>
-      );
+      // labels removed for glide demo (numeric index, pixel distance, axial steps)
     }
   }
   return <>{demoTiles}</>;
