@@ -1,3 +1,12 @@
+// Square.tsx
+// Renders tiled square assemblies and provides square-specific helpers:
+// - `applySquareEdit`: enforces pairing/mirroring/translation rules for square edges
+//   depending on `transformType` ('rotate90' | 'translate' | 'glide').
+// - `renderSquareControls`: draws control points and sets their interactive rules
+//   (driven/paired/interactive) to match the current transform mode.
+// - `buildSquareDemoTiles`: constructs the demo assembly steps and reveal
+//   sequencing used by the main App demo controls.
+// All functions assume the tile path (`tilePathData`) is already computed by App.
 import React from 'react';
 import { motion } from 'motion/react';
 
@@ -40,6 +49,10 @@ export default function Square({ tilePathData, colorA, colorB, RADIUS, CENTER, r
   };
 
   // Compute bounding box of the assembled patch (consider rotation only when appropriate)
+  // This bounding box is used to pick spacing when tiling a patch across
+  // the plane. For translate/glide we simply use the single-tile bbox; for
+  // rotation-based assemblies we simulate rotating vertices about the pivot to
+  // get the full extents of the assembled patch.
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   const angles = transformType === 'translate' ? [0] : [0, 90, 180, 270];
   // For glide mode we do not assemble by rotation; use single tile bbox
@@ -168,9 +181,19 @@ export type Point = { x: number; y: number };
 export function applySquareEdit(newPaths: Record<number, Point[]>, activePoint: { edgeIdx: number; pointIdx: number } | null, baseVertices: Point[], triSymmetry: 'cw' | 'ccw', transformType: 'rotate90' | 'translate' | 'glide', CENTER: number) {
   if (!activePoint) return newPaths;
   // Edge indices (with startAngle -PI/4): 0=right,1=top,2=left,3=bottom
+  // `driven` is the edge that is treated as the user-editable primary edge
+  // (bottom edge in this layout). Other edges are updated based on the
+  // configured `transformType` to preserve tiling rules.
   const driven = 3; // bottom edge
 
   // When the top edge is edited
+  // Behavior depends on `transformType`:
+  // - `translate`: move bottom edge by the same delta as the top midpoint
+  // - `glide`: compute mirrored point across the tile guide centroid and
+  //   then project/reflect onto the bottom edge line to produce a glide
+  //   reflection mapping
+  // - `rotate90`: compute the 90° rotated offset and apply it to the
+  //   corresponding right/left edge midpoint
   if (activePoint.edgeIdx === 1) {
     const topIdx = 1;
     if (transformType === 'translate') {
@@ -230,6 +253,8 @@ export function applySquareEdit(newPaths: Record<number, Point[]>, activePoint: 
   }
 
   // If the user drags the right edge
+  // For translate/glide, propagate the same delta or mirrored projection
+  // to the opposite (left) edge so the patch remains consistent.
   const rightIdxForTranslate = triSymmetry === 'cw' ? 0 : 2;
   const leftIdx = 2;
   if (activePoint.edgeIdx === rightIdxForTranslate) {
@@ -270,6 +295,9 @@ export function applySquareEdit(newPaths: Record<number, Point[]>, activePoint: 
   }
 
   // When the bottom edge (driven) is edited, update the left edge midpoint
+  // The driven edge movement is interpreted in terms of along-edge parameter t
+  // and normal offset d; we rotate that offset by 90° to compute the left
+  // edge midpoint delta so the assembled patch preserves local continuity.
   if (activePoint.edgeIdx === driven) {
     const leftIdx = 2;
     const bv0 = baseVertices[driven];

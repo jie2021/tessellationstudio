@@ -1,3 +1,13 @@
+// Triangle.tsx
+// Triangle-specific helpers and renderer.
+// - `initTrianglePaths`: initializes sensible control points for triangle edges,
+//   choosing a driven edge, a paired edge (based on `triSymmetry`) and a spare edge
+//   that provides two symmetric control points.
+// - `applyTriangleEdit`: when the driven edge is moved, computes corresponding
+//   mirrored updates to the paired edge; when the spare edge control is moved,
+//   it mirrors the other spare control across that edge's midpoint.
+// - Demo helpers (`startDemo`, `stopDemo`, `next/prevTriangleStep`, etc.)
+//   assemble rotation-based explanations and reveal surrounding hexes.
 import React from 'react';
 import { motion } from 'motion/react';
 
@@ -24,6 +34,9 @@ export function initTrianglePaths(baseVertices: Point[], RADIUS: number, triSymm
   const paired = triSymmetry === 'cw' ? (driven + 2) % 3 : (driven + 1) % 3;
   const spare = [0,1,2].find(x => x !== driven && x !== paired)!;
 
+  // makeSymmetric: create two symmetric control points offset from the
+  // midpoint of an edge along the edge-normal. Used for the spare edge so
+  // users get a pair of handles that move as mirror reflections by default.
   const makeSymmetric = (a: Point, b: Point) => {
     const mmx = (a.x + b.x) / 2;
     const mmy = (a.y + b.y) / 2;
@@ -69,6 +82,10 @@ export function applyTriangleEdit(newPaths: Record<number, Point[]>, activePoint
     const pv1 = baseVertices[(paired + 1) % 3];
 
     const drivenPts = newPaths[driven];
+    // For each control on the driven edge compute its along-edge parameter `t`
+    // and signed normal offset `d`. The paired edge receives the reversed
+    // along-edge parameter (1 - t) and the negated normal offset so that the
+    // mirrored piece sits consistently in the assembled patch.
     const pairedPts = drivenPts.map((_p, idx) => {
       const cp = drivenPts[idx];
       const edgeLen2 = (v1.x - v0.x) ** 2 + (v1.y - v0.y) ** 2;

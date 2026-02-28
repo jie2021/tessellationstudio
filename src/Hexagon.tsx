@@ -1,3 +1,15 @@
+// Hexagon.tsx
+// Hexagon-specific rendering and editing helpers.
+// - `applyHexagonEdit` maps edits on interactive edges to their paired edges
+//   according to the active `transformType` ('rotate120' | 'translate' | 'glide').
+//   It computes along-edge projection (t) and signed normal distance (d) and
+//   applies translation, rotation-mapping, or glide (mirror+translation)
+//   strategies to update the paired control point(s).
+// - `renderHexagonControls` exposes the appropriate interactive edges and
+//   paints paired/non-interactive edges differently to communicate which
+//   controls affect which paired edges.
+// - The default `Hexagon` component builds demo tiles for rotate/translate/glide
+//   modes and provides the `startHexagonDemo`/`stopHexagonDemo` helpers.
 import React from 'react';
 import { motion } from 'motion/react';
 
@@ -10,6 +22,11 @@ export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint:
   if (!pts || pts.length === 0) return newPaths;
 
   // helper to compute projection t and signed distance d from edge
+  // computeTD(edgeIdx,p):
+  // - returns `t`: fraction along the edge where the perpendicular projection
+  //   of point `p` lands (0..1), and `d`: signed distance from the edge
+  //   along the outward normal. Also returns the projection coordinates and
+  //   a unit normal for convenience.
   const computeTD = (edgeIdx: number, p: Point) => {
     const v0 = baseVertices[edgeIdx];
     const v1 = baseVertices[(edgeIdx + 1) % 6];
@@ -31,7 +48,8 @@ export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint:
   // mappingMode controls whether the pairing acts as a translate or glide reflection
   let mappingMode: 'translate' | 'glide' | 'rotate120' = transformType === 'rotate120' ? 'rotate120' : transformType;
   if (transformType === 'rotate120') {
-    // map odd -> previous even: 1->0,3->2,5->4
+    // rotate120 mode: only odd (user-visible) edges are interactive and map
+    // to the previous even edge via a rotation-based heuristic. e.g. 1->0,3->2,5->4
     if (ei % 2 === 1) paired = (ei + 5) % 6; else return newPaths;
   } else if (transformType === 'translate') {
     // translate: interactive edges remain 1,3,5 and pair with opposite edges
@@ -60,7 +78,10 @@ export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint:
   const plen = Math.sqrt(pex*pex + pey*pey) || 1;
   // decide mapping depending on mappingMode
   if (mappingMode === 'rotate120') {
-    // rotation pairing: heuristic mapping and flip side
+    // rotation-based mapping: flip the along-edge parameter (`tPaired = 1-t`)
+    // and invert the normal offset so that the rotated piece sits on the
+    // opposite side of the paired edge. This is a heuristic that approximates
+    // the 120° rotational pairing used by the rotate120 tiling.
     const tPaired = 1 - t;
     const dPaired = -d;
     const baseX = pv0.x + tPaired * pex;
@@ -85,7 +106,10 @@ export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint:
     const target = { x: pairedMidX + deltaX, y: pairedMidY + deltaY };
     newPaths[paired] = [{ x: target.x, y: target.y }];
   } else if (mappingMode === 'glide') {
-    // glide (reflection + translation): mirror across edge normal, preserve along-edge t
+    // glide: preserve the along-edge parameter `t` but invert the normal offset
+    // to produce the mirror component, then place the mirrored point on the
+    // paired edge. This implements a reflection+translation mapping used by
+    // glide-reflection tilings.
     const tPaired = t;
     const dPaired = -d;
     const baseX = pv0.x + tPaired * pex;
@@ -118,6 +142,11 @@ export function renderHexagonControls(params: {
     <g key={String(ei)}>
       {points.map((p, pointIdx) => {
         // determine pairedness
+        // - In `rotate120` mode the even edges are considered paired/non-interactive
+        //   (they mirror the odd interactive edges via rotation rules).
+        // - In translate/glide modes the interactive edges list determines which
+        //   edges are user-controllable; the remaining edges are treated as paired
+        //   and receive computed values.
         let isPaired = false;
         if (transformType === 'rotate120') {
           isPaired = (ei % 2 === 0); // even edges are paired/non-interactive
@@ -172,6 +201,13 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
   
   const demoTiles: React.ReactNode[] = [];
   if (transformType==='rotate120') {
+    // rotate120 demo: assemble a 3-piece rotational patch and then reveal
+    // translations of that patch outward into the hex grid.
+    // Implementation notes:
+    // - Recomputes base tile vertices locally so rotations use a consistent pivot.
+    // - Shows 1..3 rotated pieces centered at origin during the assembly steps.
+    // - After the rotation steps, reveals translated patches placed at
+    //   hex-grid centers sorted by distance from the origin.
     if(!demoMode){
       demoStep = 80;
     }
@@ -258,6 +294,10 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       }
     }
   }else if (transformType === 'translate' ) {
+    // translate demo: show how three translated pieces form a patch and then
+    // tile that patch across the plane. Behavior mirrors rotate120's reveal but
+    // computes piece offsets by translating along edge midpoints instead of
+    // rotating about a pivot.
     // Build a 3-piece patch by translating the base tile twice along
     // a chosen edge-direction, then tile that 3-piece patch across the
     // plane using the same spacing as rotate120 so the motif matches.
@@ -353,6 +393,9 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       }
     }
   }else if (transformType === 'glide') {
+    // glide demo: render a full background using glide-reflection tiling rules.
+    // The routine computes lattice centers using basis vectors derived from
+    // opposite-edge midpoints and then optionally mirrors tiles for odd columns.
     if (!demoMode) demoStep = 480;
     // 기본 조각으로 평행 이동만 해서 배경을 모두 채웁니다.
     // Compute lattice centers using opposite-edge directions (same as demo starter)

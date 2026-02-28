@@ -1,3 +1,12 @@
+// App.tsx
+// Main application component for Tessellation Studio.
+// - Manages global UI state (selected shape, colors, zoom, demo modes, editor state).
+// - Computes base vertices for regular shapes and maintains editable edge control points.
+// - Delegates shape-specific editing, demo steps, and control rendering to
+//   `Square.tsx`, `Hexagon.tsx`, and `Triangle.tsx` helper exports.
+// - Exposes export-to-PNG logic which inlines computed styles before rasterizing.
+// NOTE: This file contains only UI wiring and shared utilities; shape-specific
+// behavior (paired-edge updates, demo assembly) lives in the shape modules.
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -35,6 +44,10 @@ const RADIUS = (CANVAS_SIZE - PADDING * 2) / 2;
 
 // --- Utilities ---
 
+// Compute the vertex coordinates for a centered regular polygon used as the
+// starting guideline for editing. The `type` selects side-count and a start
+// angle so that triangles/squares/hexagons align visually with the editor.
+// Returns absolute coordinates in the editor SVG coordinate space.
 const getBaseVertices = (type: ShapeType): Point[] => {
   const vertices: Point[] = [];
   let sides = 0;
@@ -64,7 +77,15 @@ const getBaseVertices = (type: ShapeType): Point[] => {
 // --- Components ---
 
 export default function App() {
-  // Inline computed SVG styles into style attributes to preserve appearance when serializing
+  // Inline computed SVG styles into style attributes to preserve appearance when serializing.
+  // Why: When we serialize the SVG for export we want computed CSS (colors, strokes,
+  // fonts, etc.) baked into each element so the exported raster matches the on-screen
+  // appearance even outside the app's CSS environment.
+  // Implementation notes:
+  // - Iterates all descendant nodes and copies a small whitelist of CSS properties
+  //   into an inline `style` attribute.
+  // - Wrapped in try/catch per node because getComputedStyle can throw on some nodes
+  //   (e.g. foreignObjects or inaccessible cross-origin fonts in certain browsers).
   const inlineStyles = (el: Element) => {
     if (typeof window === 'undefined') return el;
     const nodes = el.querySelectorAll('*');
@@ -225,10 +246,16 @@ export default function App() {
       clientY = e.clientY;
     }
 
+    // Convert client coordinates into the SVG's internal 0..CANVAS_SIZE coordinate
+    // system taking into account the element's displayed bounding box. This keeps
+    // pointer control stable even when the SVG is scaled by CSS/layout.
     const x = (clientX - rect.left) * (CANVAS_SIZE / rect.width);
     const y = (clientY - rect.top) * (CANVAS_SIZE / rect.height);
 
-      setEdgePaths(prev => {
+    // Update the edge control points immutably. We base the edit on the
+    // pre-computed `currentEdgePaths` (which contains defaults if user hasn't
+    // edited anything) to avoid surprising mutations from a stale `prev`.
+    setEdgePaths(prev => {
       const newPaths = { ...currentEdgePaths };
       const points = [...newPaths[activePoint.edgeIdx]];
       points[activePoint.pointIdx] = { x, y };
@@ -263,6 +290,12 @@ export default function App() {
     let d = `M ${baseVertices[0].x} ${baseVertices[0].y}`;
     const numEdges = baseVertices.length;
 
+    // Build an SVG path string for a single tile by iterating each polygon edge
+    // and appending one of:
+    // - Quadratic Bézier (`Q`) when there is a single control point
+    // - Cubic Bézier (`C`) when there are two or more control points
+    // - Straight line (`L`) when in straight mode or when no control points
+    // The generated path is closed with `Z` so it can be filled/stroked.
     for (let i = 0; i < numEdges; i++) {
       const v2 = baseVertices[(i + 1) % numEdges];
       const points = currentEdgePaths[i];
