@@ -599,22 +599,35 @@ export function prevSquareStep(setter: React.Dispatch<React.SetStateAction<numbe
 export function getSquareDemoText(step: number, transformType: 'rotate90' | 'translate' | 'glide') {
   if (step <= 0) return '데모 준비 중... (다음 버튼을 눌러 시작하세요)';
   if (transformType === 'translate') {
-    if (step === 1) return '기본 도형을 표시합니다.';
-    const add = Math.max(0, step - 1);
-    return `주변을 평행이동으로 채웁니다 — #${add}`;
+    if (step === 1) return `${step}. 기본 도형을 표시합니다.`;
+    if (step === 2) return `${step}. 평행이동으로 복사합니다.`;
+    if (step === 3) return `${step}. 평행이동으로 복사합니다.`;
+    if (step === 4) return `${step}. 평행이동으로 복사합니다.`;
+    return `${step}. 4조각 패치를 평행이동하여 채웁니다.`;
   }
   if (transformType === 'glide') {
-    if (step === 1) return '기본 도형을 표시합니다.';
-    if (step === 2) return '미끄럼 반사로 위에 붙입니다.';
-    if (step === 3) return '미끄럼 반사로 왼쪽에 붙입니다.';
-    if (step === 4) return '미끄럼 반사로 위 왼쪽에 붙입니다.';
+    if (step === 1) return `${step}. 기본 도형을 표시합니다.`;
+    if (step === 2) return `${step}. 미끄럼 반사로 위에 붙입니다.`;
+    if (step === 3) return `${step}. 미끄럼 반사로 왼쪽에 붙입니다.`;
+    if (step === 4) return `${step}. 미끄럼 반사로 위 왼쪽에 붙입니다.`;
     const add = step - 4;
-    return `주변을 평행이동으로 채웁니다 — #${add}`;
+    return `${step}. 주변을 평행이동으로 채웁니다 — #${add}`;
   }
-  if (step === 1) return '기본 도형을 표시합니다.';
-  if (step === 2) return '기준점을 기준으로 90도 회전합니다.';
-  if (step === 3) return '기준점을 기준으로 180도 회전합니다.';
-  if (step === 4) return '기준점을 기준으로 270도 회전합니다.';
+  if (step === 1) return `${step}. 기본 도형을 표시합니다.`;
+  if (step === 2) return `${step}. 기준점을 기준으로 90도 회전합니다.`;
+  if (step === 3) return `${step}. 기준점을 기준으로 180도 회전합니다.`;
+  if (step === 4) return `${step}. 기준점을 기준으로 270도 회전합니다.`;
   const add = step - 4;
-  return `주변을 평행이동으로 채웁니다 — #${add}`;
+  return `${step}. 4조각 패치를 평행이동하여 채웁니다.`;
+}
+
+export function squareAutoAdvance(demoMode: boolean, demoStep: number, demoCentersLength: number, setDemoStep: React.Dispatch<React.SetStateAction<number>>) {
+  if (!demoMode) return;
+  // allow early explanatory steps (1..4) — only auto-advance after a grace region
+  if (demoStep <= 8) return;
+  // If there are enough surrounding patches, jump to the full revealed state
+  if (demoCentersLength >= 9) {
+    const full = 4 + demoCentersLength;
+    if (demoStep !== full) setDemoStep(full);
+  }
 }

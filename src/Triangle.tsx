@@ -142,7 +142,7 @@ export function startDemo(params: {
   const s = RADIUS * Math.sqrt(3);
   const stepX = s * 1.5;
   const stepY = s * Math.sqrt(3);
-  const demoRange = 4;
+  const demoRange = 8;
   const centers: {cx:number, cy:number}[] = [];
   for (let row = -demoRange; row <= demoRange; row++) {
     for (let col = -demoRange; col <= demoRange; col++) {
@@ -182,7 +182,7 @@ export function stopTriangleDemo(params: Parameters<typeof stopDemo>[0]) {
 }
 
 export function nextTriangleStep(setter: React.Dispatch<React.SetStateAction<number>>) {
-  setter(prev => Math.min(prev + 1, 6 + 80));
+  setter(prev => Math.min(prev + 1, 200));
 }
 
 export function prevTriangleStep(setter: React.Dispatch<React.SetStateAction<number>>) {
@@ -191,15 +191,15 @@ export function prevTriangleStep(setter: React.Dispatch<React.SetStateAction<num
 
 export function getTriangleDemoText(step: number, triSymmetry: 'cw' | 'ccw') {
   if (step === 0) return '데모 준비 중... (다음 버튼을 눌러 시작하세요)';
-  if (step === 1) return '변형된 도형을 준비합니다.';
+  if (step === 1) return `${step}. 기본 도형을 표시합니다.`;
   if (step >= 2 && step <= 6) {
     const k = step - 1;
     const angle = k * 60 * (triSymmetry === 'cw' ? 1 : -1);
-    return `기준점을 기준으로 ${angle}도 회전합니다.`;
+    return `${step}. 기준점을 기준으로 ${angle}도 회전합니다.`;
   }
   const hexes = Math.max(0, step - 6);
   if (hexes === 0) return '중앙 육각형 완성 — 다음 버튼을 눌러 주변 육각형을 하나씩 추가하세요.';
-  return `주변 육각형 #${hexes}는 밀어서 복사합니다.`;
+  return `${step}. 6개 조각을 평행이동으로 복사합니다.`;
 }
 
 export function triangleAutoAdvance(demoMode: boolean, demoStep: number, demoCentersLength: number, setDemoStep: React.Dispatch<React.SetStateAction<number>>) {
@@ -211,7 +211,7 @@ export function triangleAutoAdvance(demoMode: boolean, demoStep: number, demoCen
   }
 }
 
-export default function Triangle({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmetry, demoMode, demoStep, demoCenters, range = 12 }: Props) {
+export default function Triangle({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmetry, demoMode, demoStep, demoCenters, range = 24 }: Props) {
   const tiles: React.ReactNode[] = [];
 
   const hs = RADIUS * Math.sqrt(3) / 2;  // R√3/2
@@ -333,7 +333,7 @@ export function renderTriangleControls(params: {
         const isPaired = ei === paired;
         const isSpare = ei === spare;
 
-        let fill = isPaired ? '#f59e0b' : isDriven ? '#2563eb' : (isSpare ? (pointIdx === 0 ? '#2563eb' : '#60a5fa') : '#6366f1');
+        let fill = isPaired ? '#f59e0b' : isDriven ? '#2563eb' : (isSpare ? (pointIdx === 0 ? '#2563eb' : '#f59e0b') : '#6366f1');
         const interactive = !isPaired && !(isSpare && pointIdx === 1);
         if (interactive) fill = '#2563eb';
 

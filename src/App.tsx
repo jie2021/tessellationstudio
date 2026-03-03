@@ -22,8 +22,8 @@ import {
   Grid3X3
 } from 'lucide-react';
 
-import SquareShape, { applySquareEdit, Point as SquarePoint, buildSquareDemoTiles, renderSquareControls, startSquareDemo, stopSquareDemo, nextSquareStep, prevSquareStep, getSquareDemoText as squareGetDemoText } from './Square';
-import HexagonShape, { applyHexagonEdit, renderHexagonControls, startHexagonDemo, stopHexagonDemo, nextHexagonStep, prevHexagonStep, getHexagonDemoText } from './Hexagon';
+import SquareShape, { applySquareEdit, Point as SquarePoint, buildSquareDemoTiles, renderSquareControls, startSquareDemo, stopSquareDemo, nextSquareStep, prevSquareStep, getSquareDemoText as squareGetDemoText, squareAutoAdvance } from './Square';
+import HexagonShape, { applyHexagonEdit, renderHexagonControls, startHexagonDemo, stopHexagonDemo, nextHexagonStep, prevHexagonStep, getHexagonDemoText, hexagonAutoAdvance } from './Hexagon';
 import TriangleShape, { initTrianglePaths, applyTriangleEdit, Point as TriPoint, startTriangleDemo, stopTriangleDemo, renderTriangleControls, nextTriangleStep, prevTriangleStep, getTriangleDemoText, triangleAutoAdvance } from './Triangle';
 
 // --- Types ---
@@ -199,12 +199,19 @@ export default function App() {
     };
   }, []);
 
-  // If there are 7 or more surrounding hexes, when demo reaches the
-  // surrounding-hexes phase (demoStep > 6) skip incremental reveal and
-  // immediately show all surrounding hexes by advancing demoStep to full.
+  // Per-shape auto-advance: only run the shape-specific autoAdvance helper
+  // so triangle/square/hexagon can control when to jump to the "full" state.
   useEffect(() => {
-    triangleAutoAdvance(demoMode, demoStep, demoCenters.length, setDemoStep);
-  }, [demoMode, demoStep, demoCenters.length]);
+    if (shapeType === 'triangle') {
+      triangleAutoAdvance(demoMode, demoStep, demoCenters.length, setDemoStep);
+    } else if (shapeType === 'square') {
+      try { squareAutoAdvance(demoMode, demoStep, demoCenters.length, setDemoStep); } catch (e) {}
+    } else if (shapeType === 'hexagon' && (transformType === 'translate' || transformType === 'rotate120')) {
+      try { hexagonAutoAdvance(demoMode, demoStep, demoCenters.length, setDemoStep); } catch (e) {}
+    } else if (shapeType === 'hexagon' && transformType === 'glide') {
+      try { hexagonAutoAdvance(demoMode, demoStep, 0, setDemoStep); } catch (e) {}
+    }
+  }, [shapeType, demoMode, demoStep, demoCenters.length]);
 
   const nextDemoStep = () => {
     if (shapeType === 'triangle') return nextTriangleStep(setDemoStep);

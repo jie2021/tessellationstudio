@@ -12,6 +12,8 @@
 //   modes and provides the `startHexagonDemo`/`stopHexagonDemo` helpers.
 import React from 'react';
 import { motion } from 'motion/react';
+import { transform } from 'next/dist/build/swc/generated-native';
+import { NODE_ESM_RESOLVE_OPTIONS } from 'next/dist/build/webpack-config';
 
 export type Point = { x: number; y: number };
 
@@ -209,7 +211,7 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
     // - After the rotation steps, reveals translated patches placed at
     //   hex-grid centers sorted by distance from the origin.
     if(!demoMode){
-      demoStep = 80;
+      demoStep = 240;
     }
     // Recompute base vertices local to tile
     const baseVerts: { x: number; y: number }[] = [];
@@ -260,7 +262,7 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       const s = RADIUS * 1.5;
       const stepX = s ;
       const stepY = s * Math.sqrt(3)*2;
-      const demoRange = 8;
+      const demoRange = 24;
       const centers: {cx:number, cy:number}[] = [];
       for (let row = -demoRange; row <= demoRange; row++) {
         for (let col = -demoRange; col <= demoRange; col++) {
@@ -301,7 +303,7 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
     // Build a 3-piece patch by translating the base tile twice along
     // a chosen edge-direction, then tile that 3-piece patch across the
     // plane using the same spacing as rotate120 so the motif matches.
-    if (!demoMode) demoStep = 80;
+    if (!demoMode) demoStep = 240;
 
     // base vertices (centered at CENTER)
     const baseVertsT: { x: number; y: number }[] = [];
@@ -356,7 +358,7 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       const s = RADIUS * 1.5;
       const stepX = s;
       const stepY = s * Math.sqrt(3) * 2;
-      const demoRange = 8;
+      const demoRange = 24;
       const centers: {cx:number, cy:number}[] = [];
       for (let row = -demoRange; row <= demoRange; row++) {
         for (let col = -demoRange; col <= demoRange; col++) {
@@ -396,7 +398,7 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
     // glide demo: render a full background using glide-reflection tiling rules.
     // The routine computes lattice centers using basis vectors derived from
     // opposite-edge midpoints and then optionally mirrors tiles for odd columns.
-    if (!demoMode) demoStep = 480;
+    if (!demoMode) demoStep = 800;
     // 기본 조각으로 평행 이동만 해서 배경을 모두 채웁니다.
     // Compute lattice centers using opposite-edge directions (same as demo starter)
     const centerX = 0;
@@ -412,12 +414,12 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
     const m1x = (bv[1].x + bv[2].x) * 0.5;
     const m1y = (bv[1].y + bv[2].y) * 0.5;
     // scale basis vectors so centers are spaced by full patch size
-    const v0x = 2 * (m0x - centerX);
-    const v0y = 2 * (m0y - centerY);
-    const v1x = 2 * (m1x - centerX);
-    const v1y = 2 * (m1y - centerY);
+    const v0x =  2*(m0x - centerX);
+    const v0y =  2*(m0y - centerY);
+    const v1x =  2*(m1x - centerX);
+    const v1y =  2*(m1y - centerY);
 
-    const demoRange = 8;
+    const demoRange = 24;
     const centers: {cx:number, cy:number, col:number, row:number}[] = [];
     for (let row = -demoRange; row <= demoRange; row++) {
       for (let col = -demoRange; col <= demoRange; col++) {
@@ -432,26 +434,29 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
     // use centers[0] as the reference tile (#1)
     const refCol = centers[0]?.col ?? 0;
     const refRow = centers[0]?.row ?? 0;
-    // decide which centers to render in demoMode. For glide demo we want a
-    // custom reveal sequence: show tiles numbered 1,3,4,6 at demo steps 1..4
-    // respectively (these are one-based indices into the distance-sorted
-    // `centers` array). After step 4, fall back to revealing the first N.
     const selectedCenters: {cx:number, cy:number, col:number, row:number}[] = (() => {
-      if (demoMode && typeof demoStep === 'number' && demoStep > 0) {
-        if (demoStep >= 1 && demoStep <= 4) {
-          const mapping = [0, 2, 3, 5]; // one-based 1,3,4,6 -> zero-based indices
-          const indices = mapping.slice(0, demoStep).filter(i => i < centers.length);
-          // preserve order and return the mapped centers cumulatively so earlier
-          // revealed tiles remain visible as steps advance
-          return indices.map(i => centers[i]);
-        }
-        const centersCount = Math.min(centers.length, demoStep);
-        return centers.slice(0, centersCount);
-      }
-      return centers;
-    })();
+      // For the glide demo, select centers of #1, #2, #5, #6 first to show the glide pairing,
+      // then fill in the rest in order of distance. (centers is already distance-sorted)
+      if (!Array.isArray(centers) || centers.length === 0) return [];
 
-    for (let i = 0; i < selectedCenters.length; i++) {
+      // preferred one-based indices: 1,2,5,6 -> zero-based: 0,1,4,5
+      const preferredIdx = [0, 1, 4, 5].filter(i => i >= 0 && i < centers.length);
+
+      // Append remaining indices (in distance order) excluding preferred ones
+      const restIdx: number[] = [];
+      for (let i = 0; i < centers.length; i++) {
+        if (!preferredIdx.includes(i)) restIdx.push(i);
+      }
+
+      const ordered = [...preferredIdx, ...restIdx];
+
+      const take = Math.max(0, Math.min(demoStep, ordered.length));
+      const out: {cx:number, cy:number, col:number, row:number}[] = [];
+      for (let k = 0; k < take; k++) out.push(centers[ordered[k]]);
+      return out;
+    })();
+    if(true){
+      for (let i = 0; i < selectedCenters.length; i++) {
       const { cx, cy, col, row } = selectedCenters[i];
       const tx = cx - CENTER;
       const ty = cy - CENTER;
@@ -459,7 +464,7 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       const dx0 = col - refCol;
       const dy0 = row - refRow;
       const stepsForColor = Math.round((Math.abs(dx0) + Math.abs(dy0) + Math.abs(dx0 + dy0)) / 2);
-      const bgFill = (stepsForColor % 2 === 1) ? colorA : colorB;
+      const bgFill = (dx0 % 2 === 0) ? colorA : colorB;
       // decide whether this column should be mirrored: odd columns (relative to ref) are mirrored
       const colOffset = col - refCol;
       const shouldMirror = Math.abs(colOffset) % 2 === 1;
@@ -480,7 +485,7 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
         // mapping derived so tile local point (x,y) -> (-x + (cx + CENTER + shiftX), y + cy - CENTER)
         // add a small rightward offset of RADIUS/3 for mirrored (odd) columns
         // achieved with: translate(-(cx + CENTER + shiftX), cy - CENTER) scale(-1,1)
-        const shiftX = RADIUS / 3;
+        const shiftX = RADIUS / 3 + 3*RADIUS;
         const mirrorTransform = `translate(${-(cx + CENTER - shiftX)}, ${cy - CENTER}) scale(-1,1)`;
         demoTiles.push(
           <path
@@ -496,6 +501,9 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
       }
       // labels removed for glide demo (numeric index, pixel distance, axial steps)
     }
+    
+    }
+    
   }
   return <>{demoTiles}</>;
 }
@@ -581,20 +589,41 @@ export function prevHexagonStep(setter: React.Dispatch<React.SetStateAction<numb
 export function getHexagonDemoText(step: number, transformType: 'rotate120' | 'translate' | 'glide') {
   if (step <= 0) return '데모 준비 중... (다음 버튼을 눌러 시작하세요)';
   if (transformType === 'translate') {
-    if (step === 1) return '기본 도형을 표시합니다.';
-    const add = Math.max(0, step - 1);
-    return `수평/수직 평행이동으로 채웁니다 — #${add}`;
+    if (step === 1) return `${step}. 기본 도형을 표시합니다.`;
+    if (step === 2) return `${step}. 평행이동으로 복사합니다.`;
+    if (step === 3) return `${step}. 평행이동으로 복사합니다.`;
+    return `${step}. 주변을 세조각 패치로 평행이동하여 채웁니다.`;
   }
   if (transformType === 'glide') {
-    if (step === 1) return '기본 도형을 표시합니다.';
-    if (step === 2) return '미끄럼 반사로 복사합니다.';
-    const add = step - 2;
-    return `주변을 평행이동으로 채웁니다 — #${add}`;
+    if (step === 1) return `${step}. 기본 도형을 표시합니다.`;
+    if (step === 2 || step === 3 ) return `${step}. 미끄럼 반사로 복사합니다.`;
+    if (step === 4 ) return `${step}. 평행이동으로 복사합니다.`;
+    return `${step}. 4조각 패치를 평행이동하여 채웁니다.`;
   }
-  if (step === 1) return '기본 도형을 표시합니다.';
-  if (step === 2) return '기준점을 기준으로 120도 회전합니다.';
-  if (step === 3) return '기준점을 기준으로 240도 회전합니다.';
-  const add = step - 3;
-  return `주변을 평행이동으로 채웁니다 — #${add}`;
+  // transformType === 'rotate120'
+  if (step === 1) return `${step}. 기본 도형을 표시합니다.`;
+  if (step === 2) return `${step}. 기준점을 기준으로 120도 회전합니다.`;
+  if (step === 3) return `${step}. 기준점을 기준으로 240도 회전합니다.`;
+  return `${step}. 주변을 세조각 패치로 평행이동하여 채웁니다.`;
+}
+
+export function hexagonAutoAdvance(demoMode: boolean, demoStep: number, demoCentersLength: number, setDemoStep: React.Dispatch<React.SetStateAction<number>>) {
+  if (!demoMode) return;
+  // allow rotation/explanation steps; only auto-advance after a grace region
+  if (demoCentersLength > 0) {
+    if (demoStep <= 9) return;
+    // If there are many surrounding centers, reveal them all at once
+    if (demoStep >= 10) {
+      const full = 800;
+      if (demoStep !== full) setDemoStep(full);
+    }
+  }else{
+    if (demoStep <= 4) return;
+    // If there are many surrounding centers, reveal them all at once
+    if (demoStep >= 5) {
+      const full = 800;
+      if (demoStep !== full) setDemoStep(full);
+    }
+  }
 }
 
