@@ -506,7 +506,7 @@ export default function App() {
 
           <section className="space-y-4">
             <label className="text-[11px] font-bold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
-              <Info size={14} /> {shapeType === 'square' ? '5' : '4'}. 사용 방법
+              <Info size={14} /> {shapeType === 'square'|| shapeType === 'hexagon' ? '5' : '4'}. 사용 방법
             </label>
             <div className="bg-neutral-50 p-5 rounded-2xl border border-neutral-100 space-y-3">
               <div className="flex gap-3">
