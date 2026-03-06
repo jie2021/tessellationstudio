@@ -587,6 +587,45 @@ export default function App() {
           >
             <Download size={18} /> 패턴 이미지 저장
           </button>
+          <button
+            onClick={() => {
+              const svgEl = document.getElementById('tessellation-svg') as SVGSVGElement | null;
+              if (!svgEl) return;
+              const { width, height } = svgEl.getBoundingClientRect();
+              const w = Math.round(width) || 1200;
+              const h = Math.round(height) || 800;
+
+              const clone = svgEl.cloneNode(true) as SVGSVGElement;
+              clone.setAttribute('width', String(w));
+              clone.setAttribute('height', String(h));
+              clone.style.opacity = '1';
+
+              const parent = svgEl.parentElement;
+              let bgColor = '#fafafa';
+              try { if (parent) { const cb = getComputedStyle(parent).backgroundColor; if (cb && cb !== 'rgba(0, 0, 0, 0)') bgColor = cb; } } catch (e) {}
+              const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+              bg.setAttribute('width', String(w));
+              bg.setAttribute('height', String(h));
+              bg.setAttribute('fill', bgColor);
+              clone.insertBefore(bg, clone.firstChild);
+
+              // Inline computed styles so exported SVG matches on-screen rendering
+              inlineStyles(clone);
+
+              const svgStr = new XMLSerializer().serializeToString(clone);
+              const blob   = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+              const url    = URL.createObjectURL(blob);
+
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `tessellation-${shapeType}.svg`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="flex items-center justify-center gap-2 w-full py-3 px-4 bg-white text-neutral-700 rounded-2xl font-bold text-sm hover:bg-neutral-100 transition-all border border-neutral-100"
+          >
+            <Download size={18} /> 패턴 벡터 이미지 저장
+          </button>
         </div>
       </aside>
 
