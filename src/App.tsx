@@ -7,7 +7,7 @@
 // - Exposes export-to-PNG logic which inlines computed styles before rasterizing.
 // NOTE: This file contains only UI wiring and shared utilities; shape-specific
 // behavior (paired-edge updates, demo assembly) lives in the shape modules.
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Square, 
@@ -180,6 +180,18 @@ export default function App() {
     return paths;
   }, [shapeType, baseVertices, edgePaths]);
 
+  // --- Refs for stable handleMouseMove (avoids re-creating the callback on every drag frame) ---
+  const currentEdgePathsRef = useRef(currentEdgePaths);
+  const activePointRef = useRef(activePoint);
+  const shapeTypeRef = useRef(shapeType);
+  const baseVerticesRef = useRef(baseVertices);
+  const transformTypeRef = useRef(transformType);
+  currentEdgePathsRef.current = currentEdgePaths;
+  activePointRef.current = activePoint;
+  shapeTypeRef.current = shapeType;
+  baseVerticesRef.current = baseVertices;
+  transformTypeRef.current = transformType;
+
   const resetPaths = () => setEdgePaths({});
 
   const handleStopDemo = () => stopTriangleDemo({ setDemoMode, setDemoStep, demoIntervalRef });
@@ -252,8 +264,12 @@ export default function App() {
     setActivePoint({ edgeIdx, pointIdx });
   };
 
+  // handleMouseMove reads all volatile values from refs so the callback
+  // identity never changes, eliminating re-bindung of SVG event handlers
+  // on every drag frame.
   const handleMouseMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    if (!activePoint) return;
+    const ap = activePointRef.current;
+    if (!ap) return;
 
     const svg = document.getElementById('editor-svg');
     if (!svg) return;
@@ -275,35 +291,38 @@ export default function App() {
     const x = (clientX - rect.left) * (CANVAS_SIZE / rect.width);
     const y = (clientY - rect.top) * (CANVAS_SIZE / rect.height);
 
+    const curPaths = currentEdgePathsRef.current;
+    const st = shapeTypeRef.current;
+    const bv = baseVerticesRef.current;
+    const tt = transformTypeRef.current;
+
     // Update the edge control points immutably. We base the edit on the
     // pre-computed `currentEdgePaths` (which contains defaults if user hasn't
     // edited anything) to avoid surprising mutations from a stale `prev`.
-    setEdgePaths(prev => {
-      const newPaths = { ...currentEdgePaths };
-      const points = [...newPaths[activePoint.edgeIdx]];
-      points[activePoint.pointIdx] = { x, y };
-      newPaths[activePoint.edgeIdx] = points;
+    setEdgePaths(() => {
+      const newPaths = { ...curPaths };
+      const points = [...newPaths[ap.edgeIdx]];
+      points[ap.pointIdx] = { x, y };
+      newPaths[ap.edgeIdx] = points;
 
       // Delegate triangle-specific edit behavior
-      if (shapeType === 'triangle') {
-        // applyTriangleEdit will return a newPaths object with any triangle-specific
-        // paired/mirror updates applied.
-        return applyTriangleEdit(newPaths, activePoint, baseVertices as TriPoint[], TRI_SYMMETRY);
+      if (st === 'triangle') {
+        return applyTriangleEdit(newPaths, ap, bv as TriPoint[], TRI_SYMMETRY);
       }
 
       // Delegate square-specific edit behavior
-      if (shapeType === 'square') {
-        return applySquareEdit(newPaths, activePoint, baseVertices as SquarePoint[], TRI_SYMMETRY, transformType as 'rotate90' | 'translate' | 'glide', CENTER);
+      if (st === 'square') {
+        return applySquareEdit(newPaths, ap, bv as SquarePoint[], TRI_SYMMETRY, tt as 'rotate90' | 'translate' | 'glide', CENTER);
       }
 
-        // Delegate hexagon-specific edit behavior
-        if (shapeType === 'hexagon') {
-          return applyHexagonEdit(newPaths, activePoint, baseVertices as Point[], transformType as any);
-        }
+      // Delegate hexagon-specific edit behavior
+      if (st === 'hexagon') {
+        return applyHexagonEdit(newPaths, ap, bv as Point[], tt as any);
+      }
 
       return newPaths;
     });
-  }, [activePoint, currentEdgePaths]);
+  }, []);  // stable — all volatile values read from refs
 
   const handleMouseUp = () => setActivePoint(null);
 
@@ -399,7 +418,7 @@ export default function App() {
                   <div className="text-[10px] text-neutral-400 mb-2">Primary</div>
                   <div className="flex gap-2">
                     {['#6366f1', '#ec4899'].map(c => (
-                      <button
+                      <button aria-label={`Set primary color to ${c}`}
                         key={c}
                         onClick={() => setColorA(c)}
                         className={`w-10 h-10 rounded-xl border-4 transition-all hover:scale-110 active:scale-95 ${colorA === c ? 'border-white ring-2 ring-indigo-600 shadow-lg' : 'border-transparent shadow-sm'}`}
@@ -407,7 +426,7 @@ export default function App() {
                       />
                     ))}
                     <div className="relative w-10 h-10 rounded-xl overflow-hidden border-2 border-neutral-100 shadow-sm hover:border-neutral-300 transition-colors">
-                      <input 
+                      <input aria-label='Set custom primary color'
                         type="color" 
                         value={colorA} 
                         onChange={(e) => setColorA(e.target.value)}
@@ -421,7 +440,7 @@ export default function App() {
                   <div className="text-[10px] text-neutral-400 mb-2">Secondary</div>
                   <div className="flex gap-2">
                     {['#ffffff',  '#fde68a'].map(c => (
-                      <button
+                      <button aria-label={`Set secondary color to ${c}`}
                         key={c}
                         onClick={() => setColorB(c)}
                         className={`w-10 h-10 rounded-xl border-4 transition-all hover:scale-110 active:scale-95 ${colorB === c ? 'border-white ring-2 ring-indigo-600 shadow-lg' : 'border-transparent shadow-sm'}`}
@@ -429,7 +448,7 @@ export default function App() {
                       />
                     ))}
                     <div className="relative w-10 h-10 rounded-xl overflow-hidden border-2 border-neutral-100 shadow-sm hover:border-neutral-300 transition-colors">
-                      <input 
+                      <input aria-label='Set custom secondary color'
                         type="color" 
                         value={colorB} 
                         onChange={(e) => setColorB(e.target.value)}
@@ -643,6 +662,18 @@ export default function App() {
             <Download size={18} /> 패턴 벡터 이미지 저장
           </button>
         </div>
+
+        <div className="pt-6 border-t border-neutral-100 text-center">
+          <a
+            href="https://jie.kr"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group inline-flex flex-col items-center gap-1 text-neutral-400 hover:text-indigo-600 transition-colors duration-200"
+          >
+            <span className="text-[13px] font-bold tracking-tight group-hover:text-indigo-600">JIE Inc.</span>
+            <span className="text-[10px] tracking-wide">© {new Date().getFullYear()} JIE Inc. All rights reserved.</span>
+          </a>
+        </div>
       </aside>
 
       {/* Main Content Area */}
@@ -839,7 +870,7 @@ export default function App() {
           <div className="w-px h-8 bg-neutral-200" />
           <div className="flex items-center gap-4">
             <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Zoom</span>
-            <input 
+            <input aria-label='input'
               type="range" 
               min="0.5" 
               max="2" 
@@ -875,7 +906,7 @@ export default function App() {
 
       <style dangerouslySetInnerHTML={{ __html: `
         .font-display {
-          font-family: 'Space Grotesk', sans-serif;
+          font-family: 'Pretendard Variable', Pretendard, sans-serif;
         }
 
         @media print {
