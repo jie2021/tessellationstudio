@@ -35,6 +35,14 @@ interface Point {
   y: number;
 }
 
+/** Visible rectangle in SVG-local coordinates (before the translate+scale transform). */
+export interface ViewBounds {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 // --- Constants ---
 
 const CANVAS_SIZE = 400;
@@ -122,14 +130,28 @@ export default function App() {
   const [showEditor, setShowEditor] = useState(false);
 
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [viewportSize, setViewportSize] = useState({ w: 1920, h: 1080 });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const compute = () => setOffset({ x: window.innerWidth / 2 - CENTER, y: window.innerHeight / 2 - CENTER });
+    const compute = () => {
+      setOffset({ x: window.innerWidth / 2 - CENTER, y: window.innerHeight / 2 - CENTER });
+      setViewportSize({ w: window.innerWidth, h: window.innerHeight });
+    };
     compute();
     window.addEventListener('resize', compute);
     return () => window.removeEventListener('resize', compute);
   }, []);
+
+  // Compute the visible rectangle in SVG-local coordinates.
+  // The SVG content is transformed by: translate(offset) scale(zoom)
+  // So SVG-local x = (screen_x - offset.x) / zoom
+  const viewBounds = useMemo<ViewBounds>(() => ({
+    left:   -offset.x / zoom,
+    top:    -offset.y / zoom,
+    right:  (viewportSize.w - offset.x) / zoom,
+    bottom: (viewportSize.h - offset.y) / zoom,
+  }), [offset.x, offset.y, zoom, viewportSize.w, viewportSize.h]);
 
   const baseVertices = useMemo(() => getBaseVertices(shapeType), [shapeType]);
 
@@ -631,14 +653,14 @@ export default function App() {
               <g transform={`translate(${offset.x}, ${offset.y}) scale(${zoom})`}>
                 {shapeType === 'square' && (
                   squareDemoMode ? squareDemoTiles : (
-                    <SquareShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={TRI_SYMMETRY} transformType={transformType as 'rotate90' | 'translate' | 'glide'} />
+                    <SquareShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={TRI_SYMMETRY} transformType={transformType as 'rotate90' | 'translate' | 'glide'} viewBounds={viewBounds} />
                   )
                 )}
                 {shapeType === 'hexagon' && (
-                  <HexagonShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} transformType={transformType as 'rotate120' | 'translate' | 'glide'} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} />
+                  <HexagonShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} transformType={transformType as 'rotate120' | 'translate' | 'glide'} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} viewBounds={viewBounds} />
                 )}
                 {shapeType === 'triangle' && (
-                  <TriangleShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={TRI_SYMMETRY} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} />
+                  <TriangleShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={TRI_SYMMETRY} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} viewBounds={viewBounds} />
                 )}
               </g>
           </svg>

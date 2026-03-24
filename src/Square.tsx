@@ -20,6 +20,8 @@ const rotatePoint = (p: { x: number; y: number }, angleDeg: number, cx: number, 
   return { x: cx + rx, y: cy + ry };
 };
 
+interface ViewBounds { left: number; top: number; right: number; bottom: number; }
+
 interface Props {
   tilePathData: string;
   colorA: string;
@@ -29,9 +31,10 @@ interface Props {
   range?: number;
   triSymmetry?: 'cw' | 'ccw';
   transformType?: 'rotate90' | 'translate' | 'glide';
+  viewBounds?: ViewBounds;
 }
 
-function SquareInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 8, triSymmetry = 'cw', transformType = 'rotate90' }: Props) {
+function SquareInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20, triSymmetry = 'cw', transformType = 'rotate90', viewBounds }: Props) {
   // Memoize base vertices and pivot computation
   const { baseVertices, pivot } = useMemo(() => {
     const sides = 4;
@@ -97,10 +100,21 @@ function SquareInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 8, 
   // Use patch-size spacing (2× base tile) for translate/glide to match demo patch spacing
   const stepX = (transformType === 'translate' || transformType === 'glide') ? baseW * 2 : width;
   const stepY = (transformType === 'translate' || transformType === 'glide') ? baseH * 2 : height;
+  // Viewport culling margin — a tile patch can extend beyond its center, so use
+  // generous padding (2× step) to avoid popping at edges.
+  const margin = Math.max(stepX, stepY) * 2;
+
   for (let r = -range; r < range; r++) {
     for (let c = -range; c < range; c++) {
       const tx = c * stepX - CENTER;
       const ty = r * stepY - CENTER;
+
+      // Viewport culling: skip this patch if its center is outside the visible area
+      if (viewBounds) {
+        if (tx + stepX < viewBounds.left - margin || tx > viewBounds.right + margin ||
+            ty + stepY < viewBounds.top - margin  || ty > viewBounds.bottom + margin) continue;
+      }
+
       // For each assembly cell, render rotated copies about the pivot unless translate-only mode
       if (transformType === 'glide') {
         // Build 4-piece glide patch and render it with translations + reflections

@@ -12,6 +12,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 
 interface Center { cx: number; cy: number }
+interface ViewBounds { left: number; top: number; right: number; bottom: number; }
 
 interface Props {
   tilePathData: string;
@@ -24,6 +25,7 @@ interface Props {
   demoStep: number;
   demoCenters: Center[];
   range?: number;
+  viewBounds?: ViewBounds;
 }
 
 export type Point = { x: number; y: number };
@@ -211,7 +213,7 @@ export function triangleAutoAdvance(demoMode: boolean, demoStep: number, demoCen
   }
 }
 
-function TriangleInner({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmetry, demoMode, demoStep, demoCenters, range = 12 }: Props) {
+function TriangleInner({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmetry, demoMode, demoStep, demoCenters, range = 20, viewBounds }: Props) {
   const tiles: React.ReactNode[] = [];
 
   const hs = RADIUS * Math.sqrt(3) / 2;  // R√3/2
@@ -222,6 +224,7 @@ function TriangleInner({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmet
 
   const stepX = s * 1.5;
   const stepY = s * Math.sqrt(3);
+  const triMargin = Math.max(stepX, stepY) * 2;
 
   const rotDir = triSymmetry === 'cw' ? 1 : -1;
   const wedgeColors = [colorA, colorB, colorA, colorB, colorA, colorB];
@@ -290,6 +293,12 @@ function TriangleInner({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmet
 
         const tx = hexCX - pivotX;
         const ty = hexCY - pivotY;
+
+        // Viewport culling: skip hex-cells outside the visible area
+        if (viewBounds) {
+          if (tx + stepX < viewBounds.left - triMargin || tx > viewBounds.right + triMargin ||
+              ty + stepY < viewBounds.top - triMargin  || ty > viewBounds.bottom + triMargin) continue;
+        }
 
         for (let k = 0; k < 6; k++) {
           const angleDeg = k * rotDir * 60;

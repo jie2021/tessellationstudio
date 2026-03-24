@@ -183,6 +183,8 @@ export function renderHexagonControls(params: {
   );
 }
 
+interface ViewBounds { left: number; top: number; right: number; bottom: number; }
+
 interface Props {
   tilePathData: string;
   colorA: string;
@@ -194,9 +196,10 @@ interface Props {
   demoMode?: boolean;
   demoStep?: number;
   demoCenters?: { cx: number; cy: number }[];
+  viewBounds?: ViewBounds;
 }
 
-function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 8, transformType, demoMode = false, demoStep = 0, demoCenters = [] }: Props) {
+function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20, transformType, demoMode = false, demoStep = 0, demoCenters = [], viewBounds }: Props) {
   // For background, if not in demo mode, show a large patch of tiles to illustrate the pattern
   
   const demoTiles: React.ReactNode[] = [];
@@ -273,10 +276,14 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 8,
       centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
   
       const reveal = Math.min(hexToShow, centers.length);
+      const hexMargin = RADIUS * 4;
       for (let i = 0; i < reveal; i++) {
         const { cx, cy } = centers[i];
         const tx = cx - pivot.x;
         const ty = cy - pivot.y;
+        // Viewport culling
+        if (viewBounds && (tx < viewBounds.left - hexMargin || tx > viewBounds.right + hexMargin ||
+            ty < viewBounds.top - hexMargin || ty > viewBounds.bottom + hexMargin)) continue;
         // render the assembled 3-piece patch translated to center
         for (let k = 0; k < 3; k++) {
           const angle = k * 120;
@@ -372,8 +379,12 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 8,
       // compute centroid of piece offsets so we can place the patch
       const avgOx = (pieceOffsets[0][0] + pieceOffsets[1][0] + pieceOffsets[2][0]) / 3;
       const avgOy = (pieceOffsets[0][1] + pieceOffsets[1][1] + pieceOffsets[2][1]) / 3;
+      const hexTransMargin = RADIUS * 4;
       for (let i = 0; i < reveal; i++) {
         const { cx, cy } = centers[i];
+        // Viewport culling (use center as approximation)
+        if (viewBounds && (cx < viewBounds.left - hexTransMargin || cx > viewBounds.right + hexTransMargin ||
+            cy < viewBounds.top - hexTransMargin || cy > viewBounds.bottom + hexTransMargin)) continue;
         for (let k = 0; k < 3; k++) {
           const ox = pieceOffsets[k][0];
           const oy = pieceOffsets[k][1];
@@ -454,10 +465,14 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 8,
       return out;
     })();
     if(true){
+      const glideMargin = RADIUS * 4;
       for (let i = 0; i < selectedCenters.length; i++) {
       const { cx, cy, col, row } = selectedCenters[i];
       const tx = cx - CENTER;
       const ty = cy - CENTER;
+      // Viewport culling
+      if (viewBounds && (tx < viewBounds.left - glideMargin || tx > viewBounds.right + glideMargin ||
+          ty < viewBounds.top - glideMargin || ty > viewBounds.bottom + glideMargin)) continue;
       // compute hex-grid step distance to reference and use its parity for color
       const dx0 = col - refCol;
       const dy0 = row - refRow;
