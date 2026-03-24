@@ -211,7 +211,7 @@ export function triangleAutoAdvance(demoMode: boolean, demoStep: number, demoCen
   }
 }
 
-export default function Triangle({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmetry, demoMode, demoStep, demoCenters, range = 24 }: Props) {
+function TriangleInner({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmetry, demoMode, demoStep, demoCenters, range = 12 }: Props) {
   const tiles: React.ReactNode[] = [];
 
   const hs = RADIUS * Math.sqrt(3) / 2;  // R√3/2
@@ -310,6 +310,9 @@ export default function Triangle({ tilePathData, colorA, colorB, RADIUS, CENTER,
 
   return <>{tiles}</>;
 }
+
+const Triangle = React.memo(TriangleInner);
+export default Triangle;
 
 export function renderTriangleControls(params: {
   ei: number;

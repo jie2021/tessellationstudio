@@ -10,10 +10,8 @@
 //   controls affect which paired edges.
 // - The default `Hexagon` component builds demo tiles for rotate/translate/glide
 //   modes and provides the `startHexagonDemo`/`stopHexagonDemo` helpers.
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
-import { transform } from 'next/dist/build/swc/generated-native';
-import { NODE_ESM_RESOLVE_OPTIONS } from 'next/dist/build/webpack-config';
 
 export type Point = { x: number; y: number };
 
@@ -198,7 +196,7 @@ interface Props {
   demoCenters?: { cx: number; cy: number }[];
 }
 
-export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 12, transformType, demoMode = false, demoStep = 0, demoCenters = [] }: Props) {
+function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 8, transformType, demoMode = false, demoStep = 0, demoCenters = [] }: Props) {
   // For background, if not in demo mode, show a large patch of tiles to illustrate the pattern
   
   const demoTiles: React.ReactNode[] = [];
@@ -507,8 +505,9 @@ export default function Hexagon({ tilePathData, colorA, colorB, RADIUS, CENTER, 
   }
   return <>{demoTiles}</>;
 }
-  
 
+const HexagonShape = React.memo(HexagonInner);
+export default HexagonShape;
 
 export function startHexagonDemo(params: {
   setShapeType: (s: 'triangle' | 'square' | 'hexagon') => void;

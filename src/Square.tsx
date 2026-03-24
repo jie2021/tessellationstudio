@@ -7,8 +7,18 @@
 // - `buildSquareDemoTiles`: constructs the demo assembly steps and reveal
 //   sequencing used by the main App demo controls.
 // All functions assume the tile path (`tilePathData`) is already computed by App.
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
+
+// Module-level utility to avoid re-creation on every render
+const rotatePoint = (p: { x: number; y: number }, angleDeg: number, cx: number, cy: number) => {
+  const a = (angleDeg * Math.PI) / 180;
+  const dx = p.x - cx;
+  const dy = p.y - cy;
+  const rx = Math.cos(a) * dx - Math.sin(a) * dy;
+  const ry = Math.sin(a) * dx + Math.cos(a) * dy;
+  return { x: cx + rx, y: cy + ry };
+};
 
 interface Props {
   tilePathData: string;
@@ -21,32 +31,24 @@ interface Props {
   transformType?: 'rotate90' | 'translate' | 'glide';
 }
 
-export default function Square({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 12, triSymmetry = 'cw', transformType = 'rotate90' }: Props) {
-  // Build base square vertices (matching App.getBaseVertices for square)
-  const sides = 4;
-  const startAngle = -Math.PI / 4;
-  const baseVertices: { x: number; y: number }[] = [];
-  for (let i = 0; i < sides; i++) {
-    const angle = startAngle + (i * 2 * Math.PI) / sides;
-    baseVertices.push({ x: CENTER + RADIUS * Math.cos(angle), y: CENTER + RADIUS * Math.sin(angle) });
-  }
-
-  // pivot = bottom-right vertex (max x+y)
-  let pivot = baseVertices[0];
-  let maxSum = pivot.x + pivot.y;
-  for (const v of baseVertices) {
-    const s = v.x + v.y;
-    if (s > maxSum) { pivot = v; maxSum = s; }
-  }
-
-  const rotatePoint = (p: { x: number; y: number }, angleDeg: number, cx: number, cy: number) => {
-    const a = (angleDeg * Math.PI) / 180;
-    const dx = p.x - cx;
-    const dy = p.y - cy;
-    const rx = Math.cos(a) * dx - Math.sin(a) * dy;
-    const ry = Math.sin(a) * dx + Math.cos(a) * dy;
-    return { x: cx + rx, y: cy + ry };
-  };
+function SquareInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 8, triSymmetry = 'cw', transformType = 'rotate90' }: Props) {
+  // Memoize base vertices and pivot computation
+  const { baseVertices, pivot } = useMemo(() => {
+    const sides = 4;
+    const startAngle = -Math.PI / 4;
+    const verts: { x: number; y: number }[] = [];
+    for (let i = 0; i < sides; i++) {
+      const angle = startAngle + (i * 2 * Math.PI) / sides;
+      verts.push({ x: CENTER + RADIUS * Math.cos(angle), y: CENTER + RADIUS * Math.sin(angle) });
+    }
+    let piv = verts[0];
+    let maxSum = piv.x + piv.y;
+    for (const v of verts) {
+      const s = v.x + v.y;
+      if (s > maxSum) { piv = v; maxSum = s; }
+    }
+    return { baseVertices: verts, pivot: piv };
+  }, [CENTER, RADIUS]);
 
   // Compute bounding box of the assembled patch (consider rotation only when appropriate)
   // This bounding box is used to pick spacing when tiling a patch across
@@ -175,6 +177,9 @@ export default function Square({ tilePathData, colorA, colorB, RADIUS, CENTER, r
 
   return <>{tiles}</>;
 }
+
+const SquareShape = React.memo(SquareInner);
+export default SquareShape;
 
 export type Point = { x: number; y: number };
 

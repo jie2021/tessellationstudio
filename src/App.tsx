@@ -76,34 +76,28 @@ const getBaseVertices = (type: ShapeType): Point[] => {
 
 // --- Components ---
 
-export default function App() {
-  // Inline computed SVG styles into style attributes to preserve appearance when serializing.
-  // Why: When we serialize the SVG for export we want computed CSS (colors, strokes,
-  // fonts, etc.) baked into each element so the exported raster matches the on-screen
-  // appearance even outside the app's CSS environment.
-  // Implementation notes:
-  // - Iterates all descendant nodes and copies a small whitelist of CSS properties
-  //   into an inline `style` attribute.
-  // - Wrapped in try/catch per node because getComputedStyle can throw on some nodes
-  //   (e.g. foreignObjects or inaccessible cross-origin fonts in certain browsers).
-  const inlineStyles = (el: Element) => {
-    if (typeof window === 'undefined') return el;
-    const nodes = el.querySelectorAll('*');
-    const props = ['fill','stroke','opacity','stroke-width','fill-opacity','stroke-opacity','stroke-linejoin','stroke-linecap','stroke-miterlimit','font-size','font-family','font-weight','mix-blend-mode'];
-    nodes.forEach(node => {
-      try {
-        const cs = window.getComputedStyle(node as Element);
-        const stylePairs: string[] = [];
-        for (const p of props) {
-          const v = cs.getPropertyValue(p);
-          if (v) stylePairs.push(`${p}:${v}`);
-        }
-        if (stylePairs.length) (node as HTMLElement).setAttribute('style', stylePairs.join(';'));
-      } catch (e) {
-        // ignore nodes that can't compute styles
+// Inline computed SVG styles into style attributes to preserve appearance when serializing.
+// Defined at module scope to avoid re-creation on every render.
+const INLINE_STYLE_PROPS = ['fill','stroke','opacity','stroke-width','fill-opacity','stroke-opacity','stroke-linejoin','stroke-linecap','stroke-miterlimit','font-size','font-family','font-weight','mix-blend-mode'];
+const inlineStyles = (el: Element) => {
+  if (typeof window === 'undefined') return el;
+  const nodes = el.querySelectorAll('*');
+  nodes.forEach(node => {
+    try {
+      const cs = window.getComputedStyle(node as Element);
+      const stylePairs: string[] = [];
+      for (const p of INLINE_STYLE_PROPS) {
+        const v = cs.getPropertyValue(p);
+        if (v) stylePairs.push(`${p}:${v}`);
       }
-    });
-  };
+      if (stylePairs.length) (node as HTMLElement).setAttribute('style', stylePairs.join(';'));
+    } catch (e) {
+      // ignore nodes that can't compute styles
+    }
+  });
+};
+
+export default function App() {
   const [shapeType, setShapeType] = useState<ShapeType>('square');
   const [edgePaths, setEdgePaths] = useState<Record<number, Point[]>>({});
   const [activePoint, setActivePoint] = useState<{ edgeIdx: number; pointIdx: number } | null>(null);
@@ -858,8 +852,6 @@ export default function App() {
       </main>
 
       <style dangerouslySetInnerHTML={{ __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap');
-        
         .font-display {
           font-family: 'Space Grotesk', sans-serif;
         }
