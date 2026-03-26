@@ -116,7 +116,7 @@ export default function App() {
   // Triangle symmetry is fixed to clockwise by default
   const TRI_SYMMETRY: 'cw' = 'cw';
   const [useCurve, setUseCurve] = useState(true);
-  const [transformType, setTransformType] = useState<'rotate90' | 'rotate120' | 'translate' | 'glide'>('rotate90');
+  const [transformType, setTransformType] = useState<'rotate90' | 'rotate120' | 'translate' | 'glide' | 'free'>('rotate90');
   const [demoMode, setDemoMode] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
   const demoIntervalRef = React.useRef<number | null>(null);
@@ -234,7 +234,7 @@ export default function App() {
       triangleAutoAdvance(demoMode, demoStep, demoCenters.length, setDemoStep);
     } else if (shapeType === 'square') {
       try { squareAutoAdvance(demoMode, demoStep, demoCenters.length, setDemoStep); } catch (e) {}
-    } else if (shapeType === 'hexagon' && (transformType === 'translate' || transformType === 'rotate120')) {
+    } else if (shapeType === 'hexagon' && (transformType === 'translate' || transformType === 'rotate120' || transformType === 'free')) {
       try { hexagonAutoAdvance(demoMode, demoStep, demoCenters.length, setDemoStep); } catch (e) {}
     } else if (shapeType === 'hexagon' && transformType === 'glide') {
       try { hexagonAutoAdvance(demoMode, demoStep, 0, setDemoStep); } catch (e) {}
@@ -254,7 +254,7 @@ export default function App() {
 
   const getDemoText = (step: number) => {
     if (shapeType === 'triangle') return getTriangleDemoText(step, TRI_SYMMETRY);
-    if (shapeType === 'hexagon') return getHexagonDemoText(step, transformType as 'rotate120' | 'translate' | 'glide');
+    if (shapeType === 'hexagon') return getHexagonDemoText(step, transformType as 'rotate120' | 'translate' | 'glide' | 'free');
     return getTriangleDemoText(step, TRI_SYMMETRY);
   };
 
@@ -326,7 +326,55 @@ export default function App() {
 
   const handleMouseUp = () => setActivePoint(null);
 
-  // Generate the full path for one tile
+  // Add a control point to a free-mode hexagon edge on right-click.
+  // Inserts the new point sorted by its projection (t) along the edge,
+  // then rotates all interactive-edge points to update the paired edge.
+  const handleAddHexagonPoint = useCallback((edgeIdx: number, clientX: number, clientY: number) => {
+    const svg = document.getElementById('editor-svg');
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const x = (clientX - rect.left) * (CANVAS_SIZE / rect.width);
+    const y = (clientY - rect.top) * (CANVAS_SIZE / rect.height);
+
+    const bv = baseVerticesRef.current;
+    const v0 = bv[edgeIdx];
+    const v1 = bv[(edgeIdx + 1) % 6];
+    const ex = v1.x - v0.x, ey = v1.y - v0.y;
+    const len2 = ex * ex + ey * ey || 1;
+    const tNew = ((x - v0.x) * ex + (y - v0.y) * ey) / len2;
+
+    setEdgePaths(() => {
+      const newPaths = { ...currentEdgePathsRef.current };
+
+      // Insert the new point at the correct sorted position along the edge
+      const curPoints = [...(newPaths[edgeIdx] || [])];
+      let insertIdx = curPoints.length;
+      for (let i = 0; i < curPoints.length; i++) {
+        const ti = ((curPoints[i].x - v0.x) * ex + (curPoints[i].y - v0.y) * ey) / len2;
+        if (tNew < ti) { insertIdx = i; break; }
+      }
+      curPoints.splice(insertIdx, 0, { x, y });
+      newPaths[edgeIdx] = curPoints;
+
+      // Rotate all interactive-edge points to paired edge
+      const freePairMap: Record<number, { paired: number; pivotIdx: number }> = {
+        0: { paired: 1, pivotIdx: 1 },
+        2: { paired: 3, pivotIdx: 3 },
+        4: { paired: 5, pivotIdx: 5 },
+      };
+      const mapping = freePairMap[edgeIdx];
+      if (mapping) {
+        const pivot = bv[mapping.pivotIdx];
+        const angle = -(2 * Math.PI) / 3;
+        const cosA = Math.cos(angle), sinA = Math.sin(angle);
+        newPaths[mapping.paired] = curPoints.map((pt: Point) => {
+          const dx = pt.x - pivot.x, dy = pt.y - pivot.y;
+          return { x: pivot.x + cosA * dx - sinA * dy, y: pivot.y + sinA * dx + cosA * dy };
+        }).reverse();
+      }
+      return newPaths;
+    });
+  }, []);
   const tilePathData = useMemo(() => {
     if (baseVertices.length === 0) return '';
     let d = `M ${baseVertices[0].x} ${baseVertices[0].y}`;
@@ -515,11 +563,12 @@ export default function App() {
               <label className="text-[11px] font-bold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
                 <RotateCcw size={14} /> 4. 변형 종류
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {([
                   { id: 'rotate120', label: '120도 회전' },
                   { id: 'translate', label: '평행 이동' },
                   { id: 'glide', label: '미끄럼 반사' },
+                  { id: 'free', label: '자유형' },
                 ] as const).map(opt => (
                   <button
                     key={opt.id}
@@ -688,7 +737,7 @@ export default function App() {
                   )
                 )}
                 {shapeType === 'hexagon' && (
-                  <HexagonShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} transformType={transformType as 'rotate120' | 'translate' | 'glide'} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} viewBounds={viewBounds} />
+                  <HexagonShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} transformType={transformType as 'rotate120' | 'translate' | 'glide' | 'free'} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} viewBounds={viewBounds} />
                 )}
                 {shapeType === 'triangle' && (
                   <TriangleShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={TRI_SYMMETRY} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} viewBounds={viewBounds} />
@@ -720,6 +769,7 @@ export default function App() {
                   onMouseLeave={handleMouseUp}
                   onTouchMove={handleMouseMove}
                   onTouchEnd={handleMouseUp}
+                  onContextMenu={e => e.preventDefault()}
                 >
                   {/* Base Grid Lines */}
                   {showGrid && (
@@ -758,7 +808,15 @@ export default function App() {
 
                     // Hexagon-specific controls
                     if (shapeType === 'hexagon') {
-                      return renderHexagonControls({ ei, points: points as Point[], activePoint, transformType: transformType as any, handleMouseDown });
+                      return renderHexagonControls({
+                        ei,
+                        points: points as Point[],
+                        activePoint,
+                        transformType: transformType as any,
+                        handleMouseDown,
+                        baseVertices,
+                        onAddPoint: transformType === 'free' ? handleAddHexagonPoint : undefined,
+                      });
                     }
 
                     // Fallback for other non-triangle shapes
@@ -887,7 +945,7 @@ export default function App() {
               onClick={() => {
                 if (shapeType === 'triangle') startTriangleDemo({ setShapeType, setDemoCenters, setDemoMode, setDemoStep, demoIntervalRef, RADIUS });
                 else if (shapeType === 'square') startSquareDemo({ setShapeType, setSquareDemoMode, setSquareDemoStep, setShowEditor });
-                else if (shapeType === 'hexagon') startHexagonDemo({ setShapeType, setDemoCenters, setDemoMode, setDemoStep, demoIntervalRef, RADIUS, transformType: transformType as 'rotate120' | 'translate' | 'glide' });
+                else if (shapeType === 'hexagon') startHexagonDemo({ setShapeType, setDemoCenters, setDemoMode, setDemoStep, demoIntervalRef, RADIUS, transformType: transformType as 'rotate120' | 'translate' | 'glide' | 'free' });
               }}
               className="px-3 py-2 rounded-full font-bold text-sm transition bg-indigo-600 text-white hover:bg-indigo-700"
               title="설명하기"

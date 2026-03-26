@@ -15,11 +15,42 @@ import { motion } from 'motion/react';
 
 export type Point = { x: number; y: number };
 
-export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint: { edgeIdx: number; pointIdx: number } | null, baseVertices: Point[], transformType: 'rotate120' | 'translate' | 'glide') {
+export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint: { edgeIdx: number; pointIdx: number } | null, baseVertices: Point[], transformType: 'rotate120' | 'translate' | 'glide' | 'free') {
   if (!activePoint) return newPaths;
   const ei = activePoint.edgeIdx;
   const pts = newPaths[ei];
   if (!pts || pts.length === 0) return newPaths;
+
+  // free mode: edges paired as 0↔1, 2↔3, 4↔5
+  // Interactive edges 0,2,4 (user-visible 1,3,5); paired edges 1,3,5 follow via -120° rotation
+  // around the shared vertex between the two paired edges.
+  if (transformType === 'free') {
+    // map interactive edge index to its paired edge and the shared pivot vertex index
+    const freePairMap: Record<number, { paired: number; pivotIdx: number }> = {
+      0: { paired: 1, pivotIdx: 1 },
+      2: { paired: 3, pivotIdx: 3 },
+      4: { paired: 5, pivotIdx: 5 },
+    };
+    const mapping = freePairMap[ei];
+    if (!mapping) return newPaths; // non-interactive edge (1,3,5), skip
+
+    const pivot = baseVertices[mapping.pivotIdx];
+    const angle = -(2 * Math.PI) / 3;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    // Map ALL points from the interactive edge to the paired edge via -120° rotation.
+    // The rotation reverses the traversal direction (t on edge 0 maps to 1-t on edge 1),
+    // so the resulting array must be reversed to maintain correct point order.
+    newPaths[mapping.paired] = newPaths[ei].map((pt: Point) => {
+      const dx = pt.x - pivot.x;
+      const dy = pt.y - pivot.y;
+      return {
+        x: pivot.x + cosA * dx - sinA * dy,
+        y: pivot.y + sinA * dx + cosA * dy,
+      };
+    }).reverse();
+    return newPaths;
+  }
 
   // helper to compute projection t and signed distance d from edge
   // computeTD(edgeIdx,p):
@@ -125,21 +156,45 @@ export function renderHexagonControls(params: {
   ei: number;
   points: Point[];
   activePoint: { edgeIdx: number; pointIdx: number } | null;
-  transformType: 'rotate120' | 'translate' | 'glide';
+  transformType: 'rotate120' | 'translate' | 'glide' | 'free';
   handleMouseDown: (edgeIdx: number, pointIdx: number) => void;
+  baseVertices?: Point[];
+  onAddPoint?: (edgeIdx: number, clientX: number, clientY: number) => void;
 }) {
-  const { ei, points, activePoint, transformType, handleMouseDown } = params;
+  const { ei, points, activePoint, transformType, handleMouseDown, baseVertices, onAddPoint } = params;
   // Interactive control edges:
   // - rotate120: odd edges (1,3,5) are interactive; pairs are even edges (0,2,4)
   // - translate/glide: interactive edges are 1,3,5 and paired are opposite edges (i+3)%6
+  // - free: even edges (0,2,4) are interactive; odd edges (1,3,5) are paired via -120° rotation
 
   // interactive edges vary by transform mode. For glide expose controls for edges 1,2,5
   // (user-visible edges 2,3,6) so pairs become 2<->5,3<->4,6<->1
-  const interactiveEdges = transformType === 'glide' ? [1,2,5] : [1,3,5];
+  const interactiveEdges = transformType === 'glide' ? [1,2,5] :
+                           transformType === 'free' ? [0,2,4] :
+                           [1,3,5];
   const isInteractiveEdge = interactiveEdges.includes(ei);
 
   return (
     <g key={String(ei)}>
+      {/* Hit-area line: right-click to add a control point (free mode only) */}
+      {transformType === 'free' && isInteractiveEdge && baseVertices && onAddPoint && (
+        <line
+          x1={baseVertices[ei].x}
+          y1={baseVertices[ei].y}
+          x2={baseVertices[(ei + 1) % 6].x}
+          y2={baseVertices[(ei + 1) % 6].y}
+          stroke="#2563eb"
+          strokeWidth={8}
+          strokeOpacity={0.18}
+          strokeDasharray="6 4"
+          style={{ cursor: 'cell' }}
+          onContextMenu={(e: React.MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onAddPoint(ei, e.clientX, e.clientY);
+          }}
+        />
+      )}
       {points.map((p, pointIdx) => {
         // determine pairedness
         // - In `rotate120` mode the even edges are considered paired/non-interactive
@@ -148,7 +203,9 @@ export function renderHexagonControls(params: {
         //   edges are user-controllable; the remaining edges are treated as paired
         //   and receive computed values.
         let isPaired = false;
-        if (transformType === 'rotate120') {
+        if (transformType === 'free') {
+          isPaired = (ei % 2 === 1); // odd edges (1,3,5) are paired in free mode
+        } else if (transformType === 'rotate120') {
           isPaired = (ei % 2 === 0); // even edges are paired/non-interactive
         } else {
           // for translate/glide, opposite edges are paired
@@ -192,7 +249,7 @@ interface Props {
   RADIUS: number;
   CENTER: number;
   range?: number;
-  transformType?: 'rotate120' | 'translate' | 'glide';
+  transformType?: 'rotate120' | 'translate' | 'glide' | 'free';
   demoMode?: boolean;
   demoStep?: number;
   demoCenters?: { cx: number; cy: number }[];
@@ -300,8 +357,8 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
         }
       }
     }
-  }else if (transformType === 'translate' ) {
-    // translate demo: show how three translated pieces form a patch and then
+  }else if (transformType === 'translate') {
+    // translate demo: assemble a 3-piece patch by translation and then
     // tile that patch across the plane. Behavior mirrors rotate120's reveal but
     // computes piece offsets by translating along edge midpoints instead of
     // rotating about a pivot.
@@ -395,6 +452,97 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
               key={`hex-demo-fill-${i}-${k}`}
               d={tilePathData}
               transform={`translate(${tx}, ${ty})`}
+              fill={k % 2 === 0 ? colorA : colorB}
+              stroke="#000"
+              strokeWidth="0.5"
+            />
+          );
+        }
+      }
+    }
+  }else if (transformType === 'free') {
+    // free demo: dedicated copy of the rotate120 block for independent customization.
+    // Assembles a 3-piece rotational patch and reveals translations across the hex grid.
+    if (!demoMode) {
+      demoStep = 240;
+    }
+    // Recompute base vertices local to tile
+    const baseVertsF: { x: number; y: number }[] = [];
+    const startAngleF = 0;
+    for (let i = 0; i < 6; i++) {
+      const angleF = startAngleF + (i * 2 * Math.PI) / 6;
+      baseVertsF.push({ x: CENTER + RADIUS * Math.cos(angleF), y: CENTER + RADIUS * Math.sin(angleF) });
+    }
+    const pivotF = baseVertsF[5];
+
+    // center patch assembly at origin
+    const tx0F = 0 - pivotF.x;
+    const ty0F = 0 - pivotF.y;
+
+    // show up to three rotated pieces
+    const piecesToShowF = Math.min(3, Math.max(1, demoStep));
+    for (let k = 0; k < piecesToShowF; k++) {
+      const angleF = k * 120;
+      demoTiles.push(
+        <path
+          key={`hex-demo-center-free-${k}`}
+          d={tilePathData}
+          transform={`translate(${tx0F}, ${ty0F}) rotate(${angleF}, ${pivotF.x}, ${pivotF.y})`}
+          fill={k % 2 === 0 ? colorA : colorB}
+          stroke="#000"
+          strokeWidth="0.5"
+        />
+      );
+    }
+
+    // pivot marker during rotation explanation steps
+    if (demoStep >= 1 && demoStep <= 3) {
+      const pivotWorldXF = pivotF.x + tx0F;
+      const pivotWorldYF = pivotF.y + ty0F;
+      demoTiles.push(
+        <g key="hex-demo-pivot-free" pointerEvents="none">
+          <circle cx={pivotWorldXF} cy={pivotWorldYF} r={8} fill="#ef4444" stroke="#fff" strokeWidth={2} />
+          <circle cx={pivotWorldXF} cy={pivotWorldYF} r={4} fill="#fff" />
+          <text x={pivotWorldXF + 12} y={pivotWorldYF + 4} fontSize={12} fill="#111" fontWeight={600}>기준점</text>
+        </g>
+      );
+    }
+
+    // After assembling the 3-piece patch, reveal translations to fill surrounding tiles
+    if (demoStep > 3) {
+      const hexToShowF = demoStep - 3;
+      const sF = RADIUS * 1.5;
+      const stepXF = sF;
+      const stepYF = sF * Math.sqrt(3) * 2;
+      const demoRangeF = 24;
+      const centersF: { cx: number; cy: number }[] = [];
+      for (let row = -demoRangeF; row <= demoRangeF; row++) {
+        for (let col = -demoRangeF; col <= demoRangeF; col++) {
+          if (row === 0 && col === 0) continue;
+          const hexCX = col * stepXF;
+          const hexCY = row * stepYF + (col % 2 !== 0 ? stepYF / 2 : 0);
+          centersF.push({ cx: hexCX, cy: hexCY });
+        }
+      }
+      centersF.sort((a, b) => Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy));
+
+      const revealF = Math.min(hexToShowF, centersF.length);
+      const hexMarginF = RADIUS * 4;
+      for (let i = 0; i < revealF; i++) {
+        const { cx, cy } = centersF[i];
+        const txF = cx - pivotF.x;
+        const tyF = cy - pivotF.y;
+        // Viewport culling
+        if (viewBounds && (txF < viewBounds.left - hexMarginF || txF > viewBounds.right + hexMarginF ||
+            tyF < viewBounds.top - hexMarginF || tyF > viewBounds.bottom + hexMarginF)) continue;
+        // render the assembled 3-piece patch translated to center
+        for (let k = 0; k < 3; k++) {
+          const angleF = k * 120;
+          demoTiles.push(
+            <path
+              key={`hex-demo-fill-free-${i}-${k}`}
+              d={tilePathData}
+              transform={`translate(${txF}, ${tyF}) rotate(${angleF}, ${pivotF.x}, ${pivotF.y})`}
               fill={k % 2 === 0 ? colorA : colorB}
               stroke="#000"
               strokeWidth="0.5"
@@ -531,13 +679,13 @@ export function startHexagonDemo(params: {
   setDemoStep: React.Dispatch<React.SetStateAction<number>>;
   demoIntervalRef: React.MutableRefObject<number | null>;
   RADIUS: number;
-  transformType?: 'rotate120' | 'translate' | 'glide';
+  transformType?: 'rotate120' | 'translate' | 'glide' | 'free';
 }) {
   const { setShapeType, setDemoCenters, setDemoMode, setDemoStep, demoIntervalRef, RADIUS, transformType } = params;
   setShapeType('hexagon');
-  // For rotate120, only vertical translations: steps of 3 * side length (RADIUS)
+  // For rotate120/free, only vertical translations: steps of 3 * side length (RADIUS)
   const centers: {cx:number, cy:number}[] = [];
-  if (transformType === 'rotate120') {
+  if (transformType === 'rotate120' || transformType === 'free') {
     const step = 3 * RADIUS;
     const maxN = 20;
     for (let n = 1; n <= maxN; n++) {
@@ -600,7 +748,7 @@ export function prevHexagonStep(setter: React.Dispatch<React.SetStateAction<numb
   setter(s => Math.max(s - 1, 1));
 }
 
-export function getHexagonDemoText(step: number, transformType: 'rotate120' | 'translate' | 'glide') {
+export function getHexagonDemoText(step: number, transformType: 'rotate120' | 'translate' | 'glide' | 'free') {
   if (step <= 0) return '데모 준비 중... (다음 버튼을 눌러 시작하세요)';
   if (transformType === 'translate') {
     if (step === 1) return `${step}. 기본 도형을 표시합니다.`;
@@ -613,6 +761,12 @@ export function getHexagonDemoText(step: number, transformType: 'rotate120' | 't
     if (step === 2 || step === 3 ) return `${step}. 미끄럼 반사로 복사합니다.`;
     if (step === 4 ) return `${step}. 평행이동으로 복사합니다.`;
     return `${step}. 4조각 패치를 평행이동하여 채웁니다.`;
+  }
+  if (transformType === 'free') {
+    if (step === 1) return `${step}. 기본 도형을 표시합니다.`;
+    if (step === 2) return `${step}. 기준점을 기준으로 120도 회전합니다. (자유형: 모든 변 독립 편집)`;
+    if (step === 3) return `${step}. 기준점을 기준으로 240도 회전합니다.`;
+    return `${step}. 자유형 도형을 120도 회전 기반으로 평행이동하여 채웁니다.`;
   }
   // transformType === 'rotate120'
   if (step === 1) return `${step}. 기본 도형을 표시합니다.`;
