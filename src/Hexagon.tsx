@@ -764,9 +764,9 @@ export function getHexagonDemoText(step: number, transformType: 'rotate120' | 't
   }
   if (transformType === 'free') {
     if (step === 1) return `${step}. 기본 도형을 표시합니다.`;
-    if (step === 2) return `${step}. 기준점을 기준으로 120도 회전합니다. (자유형: 모든 변 독립 편집)`;
+    if (step === 2) return `${step}. 기준점을 기준으로 120도 회전합니다.`;
     if (step === 3) return `${step}. 기준점을 기준으로 240도 회전합니다.`;
-    return `${step}. 자유형 도형을 120도 회전 기반으로 평행이동하여 채웁니다.`;
+    return `${step}. 3조각 패치를 평행이동하여 채웁니다.`;
   }
   // transformType === 'rotate120'
   if (step === 1) return `${step}. 기본 도형을 표시합니다.`;
