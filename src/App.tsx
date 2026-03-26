@@ -861,8 +861,8 @@ export default function App() {
               </motion.div>
             </AnimatePresence>
             
-            <div className="absolute -top-14 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white px-5 py-2.5 rounded-full shadow-xl border border-neutral-100 text-[10px] font-black tracking-[0.2em] text-neutral-400 uppercase">
-              <Move size={12} className="text-indigo-600" /> Edge Editor
+            <div className="absolute -top-14 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white px-5 py-2.5 rounded-full shadow-xl border border-neutral-100 text-[12px] font-black tracking-[0.2em] text-neutral-400 uppercase">
+              <Move size={12} className="text-indigo-600" /> 기본 도형 편집기
             </div>
             </div>
           </div>

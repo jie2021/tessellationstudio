@@ -15,6 +15,23 @@ import { motion } from 'motion/react';
 
 export type Point = { x: number; y: number };
 
+// Compute the midpoint color between two hex colors (t=0→colorA, t=1→colorB)
+function interpolateColor(colorA: string, colorB: string, t = 0.5): string {
+  const parseHex = (hex: string): [number, number, number] => {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h[0]+h[0]+h[1]+h[1]+h[2]+h[2] : h;
+    return [parseInt(full.slice(0,2),16), parseInt(full.slice(2,4),16), parseInt(full.slice(4,6),16)];
+  };
+  try {
+    const [r1,g1,b1] = parseHex(colorA);
+    const [r2,g2,b2] = parseHex(colorB);
+    const r = Math.round(r1+(r2-r1)*t);
+    const g = Math.round(g1+(g2-g1)*t);
+    const b = Math.round(b1+(b2-b1)*t);
+    return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+  } catch { return colorA; }
+}
+
 export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint: { edgeIdx: number; pointIdx: number } | null, baseVertices: Point[], transformType: 'rotate120' | 'translate' | 'glide' | 'free') {
   if (!activePoint) return newPaths;
   const ei = activePoint.edgeIdx;
@@ -474,6 +491,8 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
       baseVertsF.push({ x: CENTER + RADIUS * Math.cos(angleF), y: CENTER + RADIUS * Math.sin(angleF) });
     }
     const pivotF = baseVertsF[5];
+    // Third color: midpoint between primary and secondary
+    const colorC = interpolateColor(colorA, colorB);
 
     // center patch assembly at origin
     const tx0F = 0 - pivotF.x;
@@ -488,7 +507,7 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
           key={`hex-demo-center-free-${k}`}
           d={tilePathData}
           transform={`translate(${tx0F}, ${ty0F}) rotate(${angleF}, ${pivotF.x}, ${pivotF.y})`}
-          fill={k % 2 === 0 ? colorA : colorB}
+          fill={k === 0 ? colorA : k === 1 ? colorB : colorC}
           stroke="#000"
           strokeWidth="0.5"
         />
@@ -543,7 +562,7 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
               key={`hex-demo-fill-free-${i}-${k}`}
               d={tilePathData}
               transform={`translate(${txF}, ${tyF}) rotate(${angleF}, ${pivotF.x}, ${pivotF.y})`}
-              fill={k % 2 === 0 ? colorA : colorB}
+              fill={k === 0 ? colorA : k === 1 ? colorB : colorC}
               stroke="#000"
               strokeWidth="0.5"
             />
