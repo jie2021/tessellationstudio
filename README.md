@@ -1,6 +1,13 @@
 # Tessellation Studio
 
-## Application Manuals
+## User Manuals
+
+- [Mobile user manual](docs/MOBILE-USER-MANUAL.md)
+- [Desktop user manual](docs/DESKTOP-USER-MANUAL.md)
+- [Mobile user manual presentation](docs/Tessellation-Studio-Mobile-User-Manual.pptx)
+- [Desktop user manual presentation](docs/Tessellation-Studio-Desktop-User-Manual.pptx)
+
+## Build and Packaging Manuals
 
 - [Windows Electron app manual](docs/WINDOWS-ELECTRON-MANUAL.md)
 - [Android Capacitor app manual](docs/ANDROID-CAPACITOR-MANUAL.md)

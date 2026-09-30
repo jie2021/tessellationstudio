@@ -18,6 +18,7 @@
     "cap:sync": "npm run build:web && cap sync",
     "android:open": "cap open android",
     "android:run": "cap run android",
+    "manuals:ppt": "node scripts/generate-user-manual-ppts.cjs",
     "clean": "rimraf .next",
     "lint": "tsc --noEmit"
   },
@@ -42,6 +43,7 @@
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12",
     "postcss": "^8.5.6",
+    "pptxgenjs": "^4.0.1",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.8.2",
     "wait-on": "^9.0.1"
