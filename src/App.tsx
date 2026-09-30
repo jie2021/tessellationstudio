@@ -90,25 +90,30 @@ const getBaseVertices = (type: ShapeType): Point[] => {
 
 // --- Components ---
 
-// Inline computed SVG styles into style attributes to preserve appearance when serializing.
-// Defined at module scope to avoid re-creation on every render.
-const INLINE_STYLE_PROPS = ['fill','stroke','opacity','stroke-width','fill-opacity','stroke-opacity','stroke-linejoin','stroke-linecap','stroke-miterlimit','font-size','font-family','font-weight','mix-blend-mode'];
-const inlineStyles = (el: Element) => {
-  if (typeof window === 'undefined') return el;
-  const nodes = el.querySelectorAll('*');
-  nodes.forEach(node => {
-    try {
-      const cs = window.getComputedStyle(node as Element);
-      const stylePairs: string[] = [];
-      for (const p of INLINE_STYLE_PROPS) {
-        const v = cs.getPropertyValue(p);
-        if (v) stylePairs.push(`${p}:${v}`);
-      }
-      if (stylePairs.length) (node as HTMLElement).setAttribute('style', stylePairs.join(';'));
-    } catch (e) {
-      // ignore nodes that can't compute styles
-    }
-  });
+const serializePatternSvg = (svgEl: SVGSVGElement) => {
+  const { width, height } = svgEl.getBoundingClientRect();
+  const exportWidth = Math.round(width) || 1200;
+  const exportHeight = Math.round(height) || 800;
+  const clone = svgEl.cloneNode(true) as SVGSVGElement;
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('width', String(exportWidth));
+  clone.setAttribute('height', String(exportHeight));
+  clone.style.opacity = '1';
+
+  const backgroundColor = svgEl.parentElement
+    ? getComputedStyle(svgEl.parentElement).backgroundColor
+    : '#fafafa';
+  const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  background.setAttribute('width', String(exportWidth));
+  background.setAttribute('height', String(exportHeight));
+  background.setAttribute('fill', backgroundColor === 'rgba(0, 0, 0, 0)' ? '#fafafa' : backgroundColor);
+  clone.insertBefore(background, clone.firstChild);
+
+  return {
+    svgText: new XMLSerializer().serializeToString(clone),
+    width: exportWidth,
+    height: exportHeight,
+  };
 };
 
 const getCurveDisplayPoint = (start: Point, end: Point, controls: Point[], pointIdx: number, useCurve: boolean): Point => {
@@ -234,6 +239,9 @@ export default function App() {
   const shapeTypeRef = useRef(shapeType);
   const baseVerticesRef = useRef(baseVertices);
   const transformTypeRef = useRef(transformType);
+  const editorRectRef = useRef<DOMRect | null>(null);
+  const pendingPointerRef = useRef<{ clientX: number; clientY: number } | null>(null);
+  const dragFrameRef = useRef<number | null>(null);
   currentEdgePathsRef.current = currentEdgePaths;
   activePointRef.current = activePoint;
   shapeTypeRef.current = shapeType;
@@ -272,6 +280,10 @@ export default function App() {
         window.clearInterval(demoIntervalRef.current);
         demoIntervalRef.current = null;
       }
+      if (dragFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragFrameRef.current);
+        dragFrameRef.current = null;
+      }
     };
   }, []);
 
@@ -309,29 +321,18 @@ export default function App() {
   const getSquareDemoText = (step: number) => squareGetDemoText(step, transformType as 'rotate90' | 'translate' | 'glide');
 
   const handleMouseDown = (edgeIdx: number, pointIdx: number) => {
-    setActivePoint({ edgeIdx, pointIdx });
+    editorRectRef.current = document.getElementById('editor-svg')?.getBoundingClientRect() ?? null;
+    const nextActivePoint = { edgeIdx, pointIdx };
+    activePointRef.current = nextActivePoint;
+    setActivePoint(nextActivePoint);
   };
 
-  // handleMouseMove reads all volatile values from refs so the callback
-  // identity never changes, eliminating re-binding of SVG event handlers
-  // on every drag frame.
-  const handleMouseMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+  const updateDraggedPoint = useCallback((clientX: number, clientY: number) => {
     const ap = activePointRef.current;
     if (!ap) return;
 
-    const svg = document.getElementById('editor-svg');
-    if (!svg) return;
-
-    const rect = svg.getBoundingClientRect();
-    let clientX, clientY;
-    
-    if ('touches' in e) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
+    const rect = editorRectRef.current;
+    if (!rect || rect.width === 0 || rect.height === 0) return;
 
     // Convert client coordinates into the SVG's internal 0..CANVAS_SIZE coordinate
     // system taking into account the element's displayed bounding box. This keeps
@@ -370,9 +371,38 @@ export default function App() {
 
       return newPaths;
     });
-  }, []);  // stable — all volatile values read from refs
+  }, []);
 
-  const handleMouseUp = () => setActivePoint(null);
+  // Pointer events can arrive faster than the display refresh rate. Keep only
+  // the latest coordinates and commit at most one React update per frame.
+  const handleMouseMove = useCallback((event: React.MouseEvent | React.TouchEvent) => {
+    if (!activePointRef.current) return;
+
+    const pointer = 'touches' in event ? event.touches[0] : event;
+    if (!pointer) return;
+    pendingPointerRef.current = { clientX: pointer.clientX, clientY: pointer.clientY };
+
+    if (dragFrameRef.current !== null) return;
+    dragFrameRef.current = window.requestAnimationFrame(() => {
+      dragFrameRef.current = null;
+      const pending = pendingPointerRef.current;
+      pendingPointerRef.current = null;
+      if (pending) updateDraggedPoint(pending.clientX, pending.clientY);
+    });
+  }, [updateDraggedPoint]);
+
+  const handleMouseUp = () => {
+    if (dragFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
+    const pending = pendingPointerRef.current;
+    pendingPointerRef.current = null;
+    if (pending) updateDraggedPoint(pending.clientX, pending.clientY);
+    editorRectRef.current = null;
+    activePointRef.current = null;
+    setActivePoint(null);
+  };
 
   // Add a control point to a free-mode hexagon edge through its context-menu gesture.
   // Inserts the new point sorted by its projection (t) along the edge,
@@ -460,8 +490,8 @@ export default function App() {
 
   // Precompute square demo tiles (delegated to Square.tsx)
   const squareDemoTiles = useMemo(() =>
-    buildSquareDemoTiles({ squareDemoMode, squareDemoStep, tilePathData, baseVertices, colorA, colorB, transformType: transformType as 'rotate90' | 'translate' | 'glide', RADIUS }),
-    [squareDemoMode, squareDemoStep, tilePathData, baseVertices, colorA, colorB, transformType, RADIUS]
+    buildSquareDemoTiles({ squareDemoMode, squareDemoStep, baseVertices, colorA, colorB, transformType: transformType as 'rotate90' | 'translate' | 'glide', RADIUS }),
+    [squareDemoMode, squareDemoStep, baseVertices, colorA, colorB, transformType, RADIUS]
   );
 
   return (
@@ -687,47 +717,29 @@ export default function App() {
             onClick={() => {
               const svgEl = document.getElementById('tessellation-svg') as SVGSVGElement | null;
               if (!svgEl) return;
-              const { width, height } = svgEl.getBoundingClientRect();
-              const w = Math.round(width)  || 1200;
-              const h = Math.round(height) || 800;
-
-              // Clone and make fully opaque for export
-              const clone = svgEl.cloneNode(true) as SVGSVGElement;
-              clone.setAttribute('width',  String(w));
-              clone.setAttribute('height', String(h));
-              clone.style.opacity = '1';
-
-              // Inline background colour (use computed background of parent if available)
-              const parent = svgEl.parentElement;
-              let bgColor = '#fafafa';
-              try { if (parent) { const cb = getComputedStyle(parent).backgroundColor; if (cb && cb !== 'rgba(0, 0, 0, 0)') bgColor = cb; } } catch (e) {}
-              const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-              bg.setAttribute('width',  String(w));
-              bg.setAttribute('height', String(h));
-              bg.setAttribute('fill', bgColor);
-              clone.insertBefore(bg, clone.firstChild);
-
-              // Inline computed styles so exported SVG matches on-screen rendering
-              inlineStyles(clone);
-
-              const svgStr = new XMLSerializer().serializeToString(clone);
-              const blob   = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+              const { svgText, width, height } = serializePatternSvg(svgEl);
+              const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
               const url    = URL.createObjectURL(blob);
 
               const img = new Image();
               img.onload = () => {
                 const canvas = document.createElement('canvas');
-                canvas.width  = w * 2;   // 2× for retina
-                canvas.height = h * 2;
+                canvas.width  = width * 2;   // 2× for retina
+                canvas.height = height * 2;
                 const ctx = canvas.getContext('2d')!;
                 ctx.scale(2, 2);
                 ctx.drawImage(img, 0, 0);
                 URL.revokeObjectURL(url);
 
-                const a = document.createElement('a');
-                a.download = `tessellation-${shapeType}.png`;
-                a.href = canvas.toDataURL('image/png');
-                a.click();
+                canvas.toBlob((pngBlob) => {
+                  if (!pngBlob) return;
+                  const pngUrl = URL.createObjectURL(pngBlob);
+                  const a = document.createElement('a');
+                  a.download = `tessellation-${shapeType}.png`;
+                  a.href = pngUrl;
+                  a.click();
+                  window.setTimeout(() => URL.revokeObjectURL(pngUrl), 0);
+                }, 'image/png');
               };
               img.src = url;
             }}
@@ -738,36 +750,15 @@ export default function App() {
             onClick={() => {
               const svgEl = document.getElementById('tessellation-svg') as SVGSVGElement | null;
               if (!svgEl) return;
-              const { width, height } = svgEl.getBoundingClientRect();
-              const w = Math.round(width) || 1200;
-              const h = Math.round(height) || 800;
-
-              const clone = svgEl.cloneNode(true) as SVGSVGElement;
-              clone.setAttribute('width', String(w));
-              clone.setAttribute('height', String(h));
-              clone.style.opacity = '1';
-
-              const parent = svgEl.parentElement;
-              let bgColor = '#fafafa';
-              try { if (parent) { const cb = getComputedStyle(parent).backgroundColor; if (cb && cb !== 'rgba(0, 0, 0, 0)') bgColor = cb; } } catch (e) {}
-              const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-              bg.setAttribute('width', String(w));
-              bg.setAttribute('height', String(h));
-              bg.setAttribute('fill', bgColor);
-              clone.insertBefore(bg, clone.firstChild);
-
-              // Inline computed styles so exported SVG matches on-screen rendering
-              inlineStyles(clone);
-
-              const svgStr = new XMLSerializer().serializeToString(clone);
-              const blob   = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+              const { svgText } = serializePatternSvg(svgEl);
+              const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
               const url    = URL.createObjectURL(blob);
 
               const a = document.createElement('a');
               a.href = url;
               a.download = `tessellation-${shapeType}.svg`;
               a.click();
-              URL.revokeObjectURL(url);
+              window.setTimeout(() => URL.revokeObjectURL(url), 0);
             }}
             className="flex items-center justify-center gap-2 w-full py-3 px-4 bg-white text-neutral-700 rounded-2xl font-bold text-sm hover:bg-neutral-100 transition-all border border-neutral-100"
           >
@@ -817,17 +808,20 @@ export default function App() {
         {/* Tessellation Preview (Background) */}
         <div className="absolute inset-0 z-0 overflow-hidden bg-neutral-50">
           <svg id="tessellation-svg" className="w-full h-full transition-opacity duration-500">
+              <defs>
+                <path id="tessellation-tile" d={tilePathData} />
+              </defs>
               <g transform={`translate(${offset.x}, ${offset.y}) scale(${zoom})`}>
                 {shapeType === 'square' && (
                   squareDemoMode ? squareDemoTiles : (
-                    <SquareShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={TRI_SYMMETRY} transformType={transformType as 'rotate90' | 'translate' | 'glide'} viewBounds={viewBounds} />
+                    <SquareShape colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={TRI_SYMMETRY} transformType={transformType as 'rotate90' | 'translate' | 'glide'} viewBounds={viewBounds} />
                   )
                 )}
                 {shapeType === 'hexagon' && (
-                  <HexagonShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} transformType={transformType as 'rotate120' | 'translate' | 'glide' | 'free'} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} viewBounds={viewBounds} />
+                  <HexagonShape colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} transformType={transformType as 'rotate120' | 'translate' | 'glide' | 'free'} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} viewBounds={viewBounds} />
                 )}
                 {shapeType === 'triangle' && (
-                  <TriangleShape tilePathData={tilePathData} colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={TRI_SYMMETRY} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} viewBounds={viewBounds} />
+                  <TriangleShape colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={TRI_SYMMETRY} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} viewBounds={viewBounds} />
                 )}
               </g>
           </svg>

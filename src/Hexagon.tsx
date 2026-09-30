@@ -14,6 +14,58 @@ import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
 
 export type Point = { x: number; y: number };
+type DemoCenter = { cx: number; cy: number };
+type GlideCenter = DemoCenter & { col: number; row: number };
+
+const staggeredCenterCache = new Map<string, DemoCenter[]>();
+const glideCenterCache = new Map<string, GlideCenter[]>();
+
+function getStaggeredCenters(radius: number, range: number): DemoCenter[] {
+  const cacheKey = `${radius}:${range}`;
+  const cached = staggeredCenterCache.get(cacheKey);
+  if (cached) return cached;
+
+  const stepX = radius * 1.5;
+  const stepY = stepX * Math.sqrt(3) * 2;
+  const centers: DemoCenter[] = [];
+  for (let row = -range; row <= range; row++) {
+    for (let col = -range; col <= range; col++) {
+      if (row === 0 && col === 0) continue;
+      centers.push({
+        cx: col * stepX,
+        cy: row * stepY + (col % 2 !== 0 ? stepY / 2 : 0),
+      });
+    }
+  }
+  centers.sort((a, b) => Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy));
+  staggeredCenterCache.set(cacheKey, centers);
+  return centers;
+}
+
+function getGlideCenters(radius: number, range: number): GlideCenter[] {
+  const cacheKey = `${radius}:${range}`;
+  const cached = glideCenterCache.get(cacheKey);
+  if (cached) return cached;
+
+  const v0x = radius * 1.5;
+  const v0y = radius * Math.sqrt(3) / 2;
+  const v1x = 0;
+  const v1y = radius * Math.sqrt(3);
+  const centers: GlideCenter[] = [];
+  for (let row = -range; row <= range; row++) {
+    for (let col = -range; col <= range; col++) {
+      centers.push({
+        cx: col * v0x + row * v1x,
+        cy: col * v0y + row * v1y,
+        col,
+        row,
+      });
+    }
+  }
+  centers.sort((a, b) => Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy));
+  glideCenterCache.set(cacheKey, centers);
+  return centers;
+}
 
 // Compute the midpoint color between two hex colors (t=0→colorA, t=1→colorB)
 function interpolateColor(colorA: string, colorB: string, t = 0.5): string {
@@ -262,7 +314,6 @@ export function renderHexagonControls(params: {
 interface ViewBounds { left: number; top: number; right: number; bottom: number; }
 
 interface Props {
-  tilePathData: string;
   colorA: string;
   colorB: string;
   RADIUS: number;
@@ -275,7 +326,7 @@ interface Props {
   viewBounds?: ViewBounds;
 }
 
-function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20, transformType, demoMode = false, demoStep = 0, demoCenters = [], viewBounds }: Props) {
+function HexagonInner({ colorA, colorB, RADIUS, CENTER, range = 20, transformType, demoMode = false, demoStep = 0, demoCenters = [], viewBounds }: Props) {
   // For background, if not in demo mode, show a large patch of tiles to illustrate the pattern
   
   const demoTiles: React.ReactNode[] = [];
@@ -308,9 +359,9 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
     for (let k = 0; k < piecesToShow; k++) {
       const angle = k * 120; // clockwise rotations
       demoTiles.push(
-        <path
+        <use
           key={`hex-demo-center-${k}`}
-          d={tilePathData}
+          href="#tessellation-tile"
           transform={`translate(${tx0}, ${ty0}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
           fill={k % 2 === 0 ? colorA : colorB}
           stroke="#000"
@@ -336,20 +387,8 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
     if (demoStep > 3) {
       const hexToShow = demoStep - 3;
       // Build hex grid centers (triangle-style) and pick nearest N
-      const s = RADIUS * 1.5;
-      const stepX = s ;
-      const stepY = s * Math.sqrt(3)*2;
       const demoRange = 24;
-      const centers: {cx:number, cy:number}[] = [];
-      for (let row = -demoRange; row <= demoRange; row++) {
-        for (let col = -demoRange; col <= demoRange; col++) {
-          if (row === 0 && col === 0) continue;
-          const hexCX = col * stepX;
-          const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
-          centers.push({ cx: hexCX, cy: hexCY });
-        }
-      }
-      centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
+      const centers = getStaggeredCenters(RADIUS, demoRange);
   
       const reveal = Math.min(hexToShow, centers.length);
       const hexMargin = RADIUS * 4;
@@ -364,9 +403,9 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
         for (let k = 0; k < 3; k++) {
           const angle = k * 120;
           demoTiles.push(
-            <path
+            <use
               key={`hex-demo-fill-${i}-${k}`}
-              d={tilePathData}
+              href="#tessellation-tile"
               transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
               fill={k % 2 === 0 ? colorA : colorB}
               stroke="#000"
@@ -420,9 +459,9 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
       const tx = -avgOx + ox;
       const ty = -avgOy + oy;
       demoTiles.push(
-        <path
+        <use
           key={`hex-demo-center-${k}`}
-          d={tilePathData}
+          href="#tessellation-tile"
           transform={`translate(${tx}, ${ty})`}
           fill={k % 2 === 0 ? colorA : colorB}
           stroke="#000"
@@ -436,20 +475,8 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
     // after assembly steps, reveal translated patches across the same hex grid used by rotate120
     if (demoStep > 3) {
       const hexToShow = demoStep - 3;
-      const s = RADIUS * 1.5;
-      const stepX = s;
-      const stepY = s * Math.sqrt(3) * 2;
       const demoRange = 24;
-      const centers: {cx:number, cy:number}[] = [];
-      for (let row = -demoRange; row <= demoRange; row++) {
-        for (let col = -demoRange; col <= demoRange; col++) {
-          if (row === 0 && col === 0) continue;
-          const hexCX = col * stepX;
-          const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
-          centers.push({ cx: hexCX, cy: hexCY });
-        }
-      }
-      centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
+      const centers = getStaggeredCenters(RADIUS, demoRange);
 
       const reveal = Math.min(hexToShow, centers.length);
       // compute centroid of piece offsets so we can place the patch
@@ -467,9 +494,9 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
           const tx = (cx + (ox - avgOx));
           const ty = cy + (oy - avgOy);
           demoTiles.push(
-            <path
+            <use
               key={`hex-demo-fill-${i}-${k}`}
-              d={tilePathData}
+              href="#tessellation-tile"
               transform={`translate(${tx}, ${ty})`}
               fill={k % 2 === 0 ? colorA : colorB}
               stroke="#000"
@@ -505,9 +532,9 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
     for (let k = 0; k < piecesToShowF; k++) {
       const angleF = k * 120;
       demoTiles.push(
-        <path
+        <use
           key={`hex-demo-center-free-${k}`}
-          d={tilePathData}
+          href="#tessellation-tile"
           transform={`translate(${tx0F}, ${ty0F}) rotate(${angleF}, ${pivotF.x}, ${pivotF.y})`}
           fill={k === 0 ? colorA : k === 1 ? colorB : colorC}
           stroke="#000"
@@ -532,20 +559,8 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
     // After assembling the 3-piece patch, reveal translations to fill surrounding tiles
     if (demoStep > 3) {
       const hexToShowF = demoStep - 3;
-      const sF = RADIUS * 1.5;
-      const stepXF = sF;
-      const stepYF = sF * Math.sqrt(3) * 2;
       const demoRangeF = 24;
-      const centersF: { cx: number; cy: number }[] = [];
-      for (let row = -demoRangeF; row <= demoRangeF; row++) {
-        for (let col = -demoRangeF; col <= demoRangeF; col++) {
-          if (row === 0 && col === 0) continue;
-          const hexCX = col * stepXF;
-          const hexCY = row * stepYF + (col % 2 !== 0 ? stepYF / 2 : 0);
-          centersF.push({ cx: hexCX, cy: hexCY });
-        }
-      }
-      centersF.sort((a, b) => Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy));
+      const centersF = getStaggeredCenters(RADIUS, demoRangeF);
 
       const revealF = Math.min(hexToShowF, centersF.length);
       const hexMarginF = RADIUS * 4;
@@ -560,9 +575,9 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
         for (let k = 0; k < 3; k++) {
           const angleF = k * 120;
           demoTiles.push(
-            <path
+            <use
               key={`hex-demo-fill-free-${i}-${k}`}
-              d={tilePathData}
+              href="#tessellation-tile"
               transform={`translate(${txF}, ${tyF}) rotate(${angleF}, ${pivotF.x}, ${pivotF.y})`}
               fill={k === 0 ? colorA : k === 1 ? colorB : colorC}
               stroke="#000"
@@ -577,36 +592,8 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
     // The routine computes lattice centers using basis vectors derived from
     // opposite-edge midpoints and then optionally mirrors tiles for odd columns.
     if (!demoMode) demoStep = 800;
-    // 기본 조각으로 평행 이동만 해서 배경을 모두 채웁니다.
-    // Compute lattice centers using opposite-edge directions (same as demo starter)
-    const centerX = 0;
-    const centerY = 0;
-    const bv: { x: number; y: number }[] = [];
-    const startAngle = 0;
-    for (let i = 0; i < 6; i++) {
-      const angle = startAngle + (i * 2 * Math.PI) / 6;
-      bv.push({ x: centerX + RADIUS * Math.cos(angle), y: centerY + RADIUS * Math.sin(angle) });
-    }
-    const m0x = (bv[0].x + bv[1].x) * 0.5;
-    const m0y = (bv[0].y + bv[1].y) * 0.5;
-    const m1x = (bv[1].x + bv[2].x) * 0.5;
-    const m1y = (bv[1].y + bv[2].y) * 0.5;
-    // scale basis vectors so centers are spaced by full patch size
-    const v0x =  2*(m0x - centerX);
-    const v0y =  2*(m0y - centerY);
-    const v1x =  2*(m1x - centerX);
-    const v1y =  2*(m1y - centerY);
-
     const demoRange = 24;
-    const centers: {cx:number, cy:number, col:number, row:number}[] = [];
-    for (let row = -demoRange; row <= demoRange; row++) {
-      for (let col = -demoRange; col <= demoRange; col++) {
-        const hexCX = col * v0x + row * v1x;
-        const hexCY = col * v0y + row * v1y;
-        centers.push({ cx: hexCX, cy: hexCY, col, row });
-      }
-    }
-    centers.sort((a,b) => (Math.hypot(a.cx, a.cy) - Math.hypot(b.cx, b.cy)));
+    const centers = getGlideCenters(RADIUS, demoRange);
 
     // render a single base tile at each center (tilePathData is centered at (CENTER,CENTER))
     // use centers[0] as the reference tile (#1)
@@ -652,9 +639,9 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
       const shouldMirror = Math.abs(colOffset) % 2 === 1;
       if (!shouldMirror) {
         demoTiles.push(
-          <path
+          <use
             key={`hex-demo-glide-bg-${i}`}
-            d={tilePathData}
+            href="#tessellation-tile"
             transform={`translate(${tx}, ${ty})`}
             fill={bgFill}
             opacity={1}
@@ -670,9 +657,9 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
         const shiftX = RADIUS / 3 + 3*RADIUS;
         const mirrorTransform = `translate(${-(cx + CENTER - shiftX)}, ${cy - CENTER}) scale(-1,1)`;
         demoTiles.push(
-          <path
+          <use
             key={`hex-demo-glide-bg-${i}`}
-            d={tilePathData}
+            href="#tessellation-tile"
             transform={mirrorTransform}
             fill={bgFill}
             opacity={1}

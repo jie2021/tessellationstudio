@@ -15,7 +15,6 @@ interface Center { cx: number; cy: number }
 interface ViewBounds { left: number; top: number; right: number; bottom: number; }
 
 interface Props {
-  tilePathData: string;
   colorA: string;
   colorB: string;
   RADIUS: number;
@@ -213,7 +212,7 @@ export function triangleAutoAdvance(demoMode: boolean, demoStep: number, demoCen
   }
 }
 
-function TriangleInner({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmetry, demoMode, demoStep, demoCenters, range = 20, viewBounds }: Props) {
+function TriangleInner({ colorA, colorB, RADIUS, CENTER, triSymmetry, demoMode, demoStep, demoCenters, range = 20, viewBounds }: Props) {
   const tiles: React.ReactNode[] = [];
 
   const hs = RADIUS * Math.sqrt(3) / 2;  // R√3/2
@@ -239,9 +238,9 @@ function TriangleInner({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmet
     for (let k = 0; k < trianglesToShow; k++) {
       const angleDeg = k * rotDir * 60;
       tiles.push(
-        <path
+        <use
           key={`demo-center-${k}`}
-          d={tilePathData}
+          href="#tessellation-tile"
           transform={`translate(${tx0}, ${ty0}) rotate(${angleDeg}, ${pivotX}, ${pivotY})`}
           fill={wedgeColors[k]}
           stroke="#000"
@@ -273,9 +272,9 @@ function TriangleInner({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmet
         for (let k = 0; k < 6; k++) {
           const angleDeg = k * rotDir * 60;
           tiles.push(
-            <path
+            <use
               key={`demo-hex-${i}-${k}`}
-              d={tilePathData}
+              href="#tessellation-tile"
               transform={`translate(${tx}, ${ty}) rotate(${angleDeg}, ${pivotX}, ${pivotY})`}
               fill={wedgeColors[k]}
               stroke="#000"
@@ -286,26 +285,35 @@ function TriangleInner({ tilePathData, colorA, colorB, RADIUS, CENTER, triSymmet
       }
     }
   } else {
-    for (let row = -range; row < range; row++) {
-      for (let col = -range; col < range; col++) {
+    const minColumn = viewBounds
+      ? Math.max(-range, Math.ceil((viewBounds.left - triMargin + pivotX - stepX) / stepX))
+      : -range;
+    const maxColumn = viewBounds
+      ? Math.min(range - 1, Math.floor((viewBounds.right + triMargin + pivotX) / stepX))
+      : range - 1;
+
+    for (let col = minColumn; col <= maxColumn; col++) {
+      const staggerY = col % 2 !== 0 ? stepY / 2 : 0;
+      const minRow = viewBounds
+        ? Math.max(-range, Math.ceil((viewBounds.top - triMargin + pivotY - stepY - staggerY) / stepY))
+        : -range;
+      const maxRow = viewBounds
+        ? Math.min(range - 1, Math.floor((viewBounds.bottom + triMargin + pivotY - staggerY) / stepY))
+        : range - 1;
+
+      for (let row = minRow; row <= maxRow; row++) {
         const hexCX = col * stepX;
-        const hexCY = row * stepY + (col % 2 !== 0 ? stepY / 2 : 0);
+        const hexCY = row * stepY + staggerY;
 
         const tx = hexCX - pivotX;
         const ty = hexCY - pivotY;
 
-        // Viewport culling: skip hex-cells outside the visible area
-        if (viewBounds) {
-          if (tx + stepX < viewBounds.left - triMargin || tx > viewBounds.right + triMargin ||
-              ty + stepY < viewBounds.top - triMargin  || ty > viewBounds.bottom + triMargin) continue;
-        }
-
         for (let k = 0; k < 6; k++) {
           const angleDeg = k * rotDir * 60;
           tiles.push(
-            <path
+            <use
               key={`tri-${row}-${col}-${k}`}
-              d={tilePathData}
+              href="#tessellation-tile"
               transform={`translate(${tx}, ${ty}) rotate(${angleDeg}, ${pivotX}, ${pivotY})`}
               fill={wedgeColors[k]}
               stroke="#000"

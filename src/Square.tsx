@@ -23,7 +23,6 @@ const rotatePoint = (p: { x: number; y: number }, angleDeg: number, cx: number, 
 interface ViewBounds { left: number; top: number; right: number; bottom: number; }
 
 interface Props {
-  tilePathData: string;
   colorA: string;
   colorB: string;
   RADIUS: number;
@@ -34,7 +33,7 @@ interface Props {
   viewBounds?: ViewBounds;
 }
 
-function SquareInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20, triSymmetry = 'cw', transformType = 'rotate90', viewBounds }: Props) {
+function SquareInner({ colorA, colorB, RADIUS, CENTER, range = 20, triSymmetry = 'cw', transformType = 'rotate90', viewBounds }: Props) {
   // Memoize base vertices and pivot computation
   const { baseVertices, pivot } = useMemo(() => {
     const sides = 4;
@@ -103,17 +102,23 @@ function SquareInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20,
   // Viewport culling margin — a tile patch can extend beyond its center, so use
   // generous padding (2× step) to avoid popping at edges.
   const margin = Math.max(stepX, stepY) * 2;
+  const minColumn = viewBounds
+    ? Math.max(-range, Math.ceil((viewBounds.left - margin + CENTER - stepX) / stepX))
+    : -range;
+  const maxColumn = viewBounds
+    ? Math.min(range - 1, Math.floor((viewBounds.right + margin + CENTER) / stepX))
+    : range - 1;
+  const minRow = viewBounds
+    ? Math.max(-range, Math.ceil((viewBounds.top - margin + CENTER - stepY) / stepY))
+    : -range;
+  const maxRow = viewBounds
+    ? Math.min(range - 1, Math.floor((viewBounds.bottom + margin + CENTER) / stepY))
+    : range - 1;
 
-  for (let r = -range; r < range; r++) {
-    for (let c = -range; c < range; c++) {
+  for (let r = minRow; r <= maxRow; r++) {
+    for (let c = minColumn; c <= maxColumn; c++) {
       const tx = c * stepX - CENTER;
       const ty = r * stepY - CENTER;
-
-      // Viewport culling: skip this patch if its center is outside the visible area
-      if (viewBounds) {
-        if (tx + stepX < viewBounds.left - margin || tx > viewBounds.right + margin ||
-            ty + stepY < viewBounds.top - margin  || ty > viewBounds.bottom + margin) continue;
-      }
 
       // For each assembly cell, render rotated copies about the pivot unless translate-only mode
       if (transformType === 'glide') {
@@ -136,9 +141,9 @@ function SquareInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20,
             t += ` translate(${guideCx}, ${guideCy}) scale(${sx}, ${sy}) translate(${-guideCx}, ${-guideCy})`;
           }
           tiles.push(
-            <path
+            <use
               key={`sq-${r}-${c}-g-${ai}`}
-              d={tilePathData}
+              href="#tessellation-tile"
               transform={t}
               fill={p.fill}
               stroke="#000"
@@ -158,9 +163,9 @@ function SquareInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20,
           for (let pi = 0; pi < patchOffsets.length; pi++) {
             const off = patchOffsets[pi];
             tiles.push(
-              <path
+              <use
                 key={`sq-${r}-${c}-t-${pi}`}
-                d={tilePathData}
+                href="#tessellation-tile"
                 transform={`translate(${tx + off.dx}, ${ty + off.dy})`}
                 fill={off.fill}
                 stroke="#000"
@@ -174,9 +179,9 @@ function SquareInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20,
             const angle = renderAngles[ai];
             const wedgeFill = (ai % 2 === 0) ? colorA : colorB;
             tiles.push(
-              <path
+              <use
                 key={`sq-${r}-${c}-${ai}`}
-                d={tilePathData}
+                href="#tessellation-tile"
                 transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`}
                 fill={wedgeFill}
                 stroke="#000"
@@ -402,14 +407,13 @@ export function renderSquareControls(params: {
 export function buildSquareDemoTiles(params: {
   squareDemoMode: boolean;
   squareDemoStep: number;
-  tilePathData: string;
   baseVertices: Point[];
   colorA: string;
   colorB: string;
   transformType: 'rotate90' | 'translate' | 'glide';
   RADIUS: number;
 }) : React.ReactNode[] | null {
-  const { squareDemoMode, squareDemoStep, tilePathData, baseVertices, colorA, colorB, transformType, RADIUS } = params;
+  const { squareDemoMode, squareDemoStep, baseVertices, colorA, colorB, transformType, RADIUS } = params;
   if (!squareDemoMode) return null;
   if (!baseVertices || baseVertices.length === 0) return null;
 
@@ -477,7 +481,7 @@ export function buildSquareDemoTiles(params: {
       const { dx, dy, fill } = offsets[i];
       if (transformType === 'translate') {
         arr.push(
-          <path key={`sqdemo-center-patch-${i}`} d={tilePathData} transform={`translate(${dx}, ${dy})`} fill={fill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />
+          <use key={`sqdemo-center-patch-${i}`} href="#tessellation-tile" transform={`translate(${dx}, ${dy})`} fill={fill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />
         );
       } else {
         const guideCx = baseVertices.reduce((s, v) => s + v.x, 0) / baseVertices.length;
@@ -495,7 +499,7 @@ export function buildSquareDemoTiles(params: {
           const sy = p.flipV ? -1 : 1;
           t += ` translate(${guideCx}, ${guideCy}) scale(${sx}, ${sy}) translate(${-guideCx}, ${-guideCy})`;
         }
-        arr.push(<path key={`sqdemo-center-patch-${i}`} d={tilePathData} transform={t} fill={p.fill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />);
+        arr.push(<use key={`sqdemo-center-patch-${i}`} href="#tessellation-tile" transform={t} fill={p.fill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />);
       }
     }
   } else {
@@ -503,7 +507,7 @@ export function buildSquareDemoTiles(params: {
     for (let k = 0; k < n; k++) {
       const angle = k * 90;
       const wedgeFill = (k % 2 === 0) ? colorA : colorB;
-      arr.push(<path key={`sqdemo-center-${k}`} d={tilePathData} transform={`rotate(${angle}, ${pivot.x}, ${pivot.y})`} fill={wedgeFill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />);
+      arr.push(<use key={`sqdemo-center-${k}`} href="#tessellation-tile" transform={`rotate(${angle}, ${pivot.x}, ${pivot.y})`} fill={wedgeFill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />);
     }
   }
 
@@ -538,7 +542,7 @@ export function buildSquareDemoTiles(params: {
           const includeCount = Math.min(patchOffsets.length, Math.max(1, squareDemoStep));
           for (let j = 0; j < includeCount; j++) {
             const off = patchOffsets[j];
-            arr.push(<path key={`sqdemo-${i}-patch-${j}`} d={tilePathData} transform={`translate(${tx + off.dx}, ${ty + off.dy})`} fill={off.fill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />);
+            arr.push(<use key={`sqdemo-${i}-patch-${j}`} href="#tessellation-tile" transform={`translate(${tx + off.dx}, ${ty + off.dy})`} fill={off.fill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />);
           }
         } else {
           const glidePieces = [
@@ -558,14 +562,14 @@ export function buildSquareDemoTiles(params: {
               const sy = off.flipV ? -1 : 1;
               t += ` translate(${guideCx}, ${guideCy}) scale(${sx}, ${sy}) translate(${-guideCx}, ${-guideCy})`;
             }
-            arr.push(<path key={`sqdemo-${i}-patch-${j}`} d={tilePathData} transform={t} fill={off.fill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />);
+            arr.push(<use key={`sqdemo-${i}-patch-${j}`} href="#tessellation-tile" transform={t} fill={off.fill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />);
           }
         }
       } else {
         for (let k = 0; k < 4; k++) {
           const angle = k * 90;
           const wedgeFill = (k % 2 === 0) ? colorA : colorB;
-          arr.push(<path key={`sqdemo-${i}-${k}`} d={tilePathData} transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`} fill={wedgeFill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />);
+          arr.push(<use key={`sqdemo-${i}-${k}`} href="#tessellation-tile" transform={`translate(${tx}, ${ty}) rotate(${angle}, ${pivot.x}, ${pivot.y})`} fill={wedgeFill} fillOpacity={1} stroke="#000" strokeWidth={0.5} />);
         }
       }
     }
