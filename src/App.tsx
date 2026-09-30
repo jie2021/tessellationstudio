@@ -19,7 +19,13 @@ import {
   Palette,
   Move,
   Info,
-  Grid3X3
+  Grid3X3,
+  Menu,
+  X,
+  Lock,
+  Unlock,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 import SquareShape, { applySquareEdit, Point as SquarePoint, buildSquareDemoTiles, renderSquareControls, startSquareDemo, stopSquareDemo, nextSquareStep, prevSquareStep, getSquareDemoText as squareGetDemoText, squareAutoAdvance } from './Square';
@@ -105,6 +111,28 @@ const inlineStyles = (el: Element) => {
   });
 };
 
+const getCurveDisplayPoint = (start: Point, end: Point, controls: Point[], pointIdx: number, useCurve: boolean): Point => {
+  if (!useCurve || controls.length === 0) return controls[pointIdx];
+
+  const t = (pointIdx + 1) / (controls.length + 1);
+  if (controls.length === 1) {
+    const control = controls[0];
+    const inverseT = 1 - t;
+    return {
+      x: inverseT * inverseT * start.x + 2 * inverseT * t * control.x + t * t * end.x,
+      y: inverseT * inverseT * start.y + 2 * inverseT * t * control.y + t * t * end.y,
+    };
+  }
+
+  const firstControl = controls[0];
+  const lastControl = controls[controls.length - 1];
+  const inverseT = 1 - t;
+  return {
+    x: inverseT ** 3 * start.x + 3 * inverseT ** 2 * t * firstControl.x + 3 * inverseT * t ** 2 * lastControl.x + t ** 3 * end.x,
+    y: inverseT ** 3 * start.y + 3 * inverseT ** 2 * t * firstControl.y + 3 * inverseT * t ** 2 * lastControl.y + t ** 3 * end.y,
+  };
+};
+
 export default function App() {
   const [shapeType, setShapeType] = useState<ShapeType>('square');
   const [edgePaths, setEdgePaths] = useState<Record<number, Point[]>>({});
@@ -126,8 +154,10 @@ export default function App() {
   const [squareDemoStep, setSquareDemoStep] = useState(0);
   const squareDemoIntervalRef = React.useRef<number | null>(null);
 
-  // Control whether the Edge Editor overlay is shown. Default: hidden.
-  const [showEditor, setShowEditor] = useState(false);
+  // Control whether the Edge Editor overlay is shown.
+  const [showEditor, setShowEditor] = useState(true);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isPageScrollLocked, setIsPageScrollLocked] = useState(false);
 
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [viewportSize, setViewportSize] = useState({ w: 1920, h: 1080 });
@@ -142,6 +172,24 @@ export default function App() {
     window.addEventListener('resize', compute);
     return () => window.removeEventListener('resize', compute);
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMenuOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.style.overflow = isPageScrollLocked ? 'hidden' : '';
+    document.body.style.overflow = isPageScrollLocked ? 'hidden' : '';
+
+    return () => {
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+    };
+  }, [isPageScrollLocked]);
 
   // Compute the visible rectangle in SVG-local coordinates.
   // The SVG content is transformed by: translate(offset) scale(zoom)
@@ -417,16 +465,34 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-neutral-50 lg:overflow-hidden font-sans">
+    <div className={`min-h-screen flex flex-col lg:flex-row bg-neutral-50 lg:overflow-hidden font-sans ${isPageScrollLocked ? 'overflow-hidden' : ''}`}>
       {/* Sidebar Controls */}
-      <aside className="w-full lg:w-96 bg-white border-b lg:border-b-0 lg:border-r border-neutral-200 p-8 flex flex-col gap-8 z-20 shadow-xl lg:h-screen lg:overflow-y-auto">
-        <header>
+      {isMenuOpen && (
+        <button
+          type="button"
+          aria-label="메뉴 닫기"
+          onClick={() => setIsMenuOpen(false)}
+          className="fixed inset-0 z-40 bg-neutral-900/30 backdrop-blur-[2px] lg:hidden"
+        />
+      )}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-[min(88vw,24rem)] bg-white border-r border-neutral-200 p-6 sm:p-8 flex flex-col gap-8 shadow-xl overflow-y-auto transition-transform duration-300 ease-out lg:relative lg:inset-auto lg:z-20 lg:w-96 lg:translate-x-0 lg:border-r lg:p-8 ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <header className="flex items-start justify-between gap-4">
+          <div>
           <h1 className="text-3xl font-display font-bold tracking-tight text-neutral-900 leading-none">
             Tessellation <span className="text-indigo-600">Studio</span>
           </h1>
           <p className="text-sm text-neutral-500 mt-3 leading-relaxed">
             도형의 변을 자유롭게 변형하여 아름다운 반복 패턴을 만들어보세요.
           </p>
+          </div>
+          <button
+            type="button"
+            aria-label="메뉴 닫기"
+            onClick={() => setIsMenuOpen(false)}
+            className="shrink-0 rounded-xl p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 lg:hidden"
+          >
+            <X size={22} />
+          </button>
         </header>
 
         <div className="space-y-8">
@@ -727,6 +793,30 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 relative flex flex-col bg-white lg:h-screen lg:overflow-hidden">
+        <div className="relative z-30 flex items-center justify-between border-b border-neutral-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
+          <button
+            type="button"
+            aria-label="메뉴 열기"
+            aria-expanded={isMenuOpen}
+            onClick={() => setIsMenuOpen(true)}
+            className="rounded-xl p-2 text-neutral-700 transition-colors hover:bg-neutral-100"
+          >
+            <Menu size={24} />
+          </button>
+          <span className="text-sm font-bold tracking-tight text-neutral-900">
+            Tessellation <span className="text-indigo-600">Studio</span>
+          </span>
+          <button
+            type="button"
+            aria-label={isPageScrollLocked ? '페이지 스크롤 잠금 해제' : '페이지 스크롤 잠금'}
+            aria-pressed={isPageScrollLocked}
+            title={isPageScrollLocked ? '페이지 스크롤 잠금 해제' : '페이지 스크롤 잠금'}
+            onClick={() => setIsPageScrollLocked((locked) => !locked)}
+            className={`rounded-xl p-2 transition-colors ${isPageScrollLocked ? 'bg-indigo-100 text-indigo-600' : 'text-neutral-700 hover:bg-neutral-100'}`}
+          >
+            {isPageScrollLocked ? <Lock size={21} /> : <Unlock size={21} />}
+          </button>
+        </div>
         {/* Tessellation Preview (Background) */}
         <div className="absolute inset-0 z-0 overflow-hidden bg-neutral-50">
           <svg id="tessellation-svg" className="w-full h-full transition-opacity duration-500">
@@ -746,24 +836,26 @@ export default function App() {
           </svg>
         </div>
 
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-end lg:contents">
         {/* Editor Overlay (hidden during demo and during square demo) */}
         {!demoMode && !squareDemoMode && (
-          <div className="flex-1 flex items-center justify-center z-10 p-8 pointer-events-none">
-            <div className="relative pointer-events-auto">
+          <div className={`flex-none lg:flex-1 flex items-center justify-center z-10 p-2.5 sm:p-8 lg:pointer-events-none ${isPageScrollLocked ? 'touch-none' : ''}`}>
+            <div className="relative pointer-events-auto w-[calc(100vw-20px)] max-w-[464px] sm:w-auto">
             <AnimatePresence mode="wait">
+              {showEditor && (
               <motion.div 
                 key={shapeType}
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: -20 }}
                 transition={{ type: 'spring', damping: 20, stiffness: 100 }}
-                className="bg-white/90 backdrop-blur-xl p-8 rounded-[40px] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.1)] border border-white/50"
+                className="w-full bg-white/10 backdrop-blur-xl p-2.5 sm:p-8 rounded-[40px] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.1)] border border-white/50"
               >
                 <svg 
                   id="editor-svg"
                   width={CANVAS_SIZE} 
                   height={CANVAS_SIZE} 
-                  className="cursor-crosshair overflow-visible"
+                  className="w-full h-auto cursor-crosshair overflow-visible"
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
@@ -797,20 +889,30 @@ export default function App() {
                     const ei = Number(edgeIdx);
 
                     if (shapeType === 'triangle') {
-                      return renderTriangleControls({ ei, points: points as Point[], activePoint, triSymmetry: TRI_SYMMETRY, handleMouseDown });
+                      const edgeStart = baseVertices[ei];
+                      const edgeEnd = baseVertices[(ei + 1) % baseVertices.length];
+                      const displayPoints = (points as Point[]).map((point, pointIdx) => getCurveDisplayPoint(edgeStart, edgeEnd, points as Point[], pointIdx, useCurve));
+                      return renderTriangleControls({ ei, points: points as Point[], displayPoints, activePoint, triSymmetry: TRI_SYMMETRY, handleMouseDown });
                     }
 
                     // Non-triangle shapes: special-case square so bottom edge is draggable
                     // and the paired edge is shown orange and non-interactive
                     if (shapeType === 'square') {
-                      return renderSquareControls({ ei, points: points as Point[], activePoint, triSymmetry: TRI_SYMMETRY, transformType: transformType as 'rotate90' | 'translate' | 'glide', handleMouseDown });
+                      const edgeStart = baseVertices[ei];
+                      const edgeEnd = baseVertices[(ei + 1) % baseVertices.length];
+                      const displayPoints = (points as Point[]).map((point, pointIdx) => getCurveDisplayPoint(edgeStart, edgeEnd, points as Point[], pointIdx, useCurve));
+                      return renderSquareControls({ ei, points: points as Point[], displayPoints, activePoint, triSymmetry: TRI_SYMMETRY, transformType: transformType as 'rotate90' | 'translate' | 'glide', handleMouseDown });
                     }
 
                     // Hexagon-specific controls
                     if (shapeType === 'hexagon') {
+                      const edgeStart = baseVertices[ei];
+                      const edgeEnd = baseVertices[(ei + 1) % baseVertices.length];
+                      const displayPoints = (points as Point[]).map((point, pointIdx) => getCurveDisplayPoint(edgeStart, edgeEnd, points as Point[], pointIdx, useCurve));
                       return renderHexagonControls({
                         ei,
                         points: points as Point[],
+                        displayPoints,
                         activePoint,
                         transformType: transformType as any,
                         handleMouseDown,
@@ -859,11 +961,20 @@ export default function App() {
                   ))}
                 </svg>
               </motion.div>
+              )}
             </AnimatePresence>
             
-            <div className="absolute -top-14 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white px-5 py-2.5 rounded-full shadow-xl border border-neutral-100 text-[12px] font-black tracking-[0.2em] text-neutral-400 uppercase">
-              <Move size={12} className="text-indigo-600" /> 기본 도형 편집기
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowEditor((visible) => !visible)}
+              aria-expanded={showEditor}
+              aria-label={showEditor ? '기본 도형 편집기 접기' : '기본 도형 편집기 펼치기'}
+              className="absolute -top-14 left-1/2 -translate-x-1/2 flex items-center gap-2 whitespace-nowrap bg-white px-5 py-2.5 rounded-full shadow-xl border border-neutral-100 text-[12px] font-black tracking-[0.2em] text-neutral-400 uppercase transition-colors hover:text-indigo-600"
+            >
+              <Move size={12} className="text-indigo-600" />
+              기본 도형 편집기
+              {showEditor ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
             </div>
           </div>
         )}
@@ -878,10 +989,10 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.18 }}
-                className="absolute bottom-36 left-1/2 -translate-x-1/2 bg-white/95 px-5 py-3 rounded-2xl shadow-lg border border-neutral-100 text-sm font-medium text-neutral-700 flex items-center gap-3 pointer-events-auto"
+                className="absolute bottom-36 left-1/2 -translate-x-1/2 flex w-[calc(100vw-20px)] max-w-[48rem] flex-col items-center gap-2 rounded-2xl border border-neutral-100 bg-white/95 px-3 py-3 text-sm font-medium text-neutral-700 shadow-lg pointer-events-auto sm:flex-row sm:gap-3 sm:px-5"
               >
-                <div className="max-w-[48ch] text-center">{getDemoText(demoStep)}</div>
-                  <div className="ml-2 flex items-center gap-2">
+                <div className="w-full text-center sm:max-w-[48ch]">{getDemoText(demoStep)}</div>
+                  <div className="flex w-full items-center justify-center gap-2 sm:ml-2 sm:w-auto">
                   <button onClick={prevDemoStep} className="px-3 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200">이전</button>
                   <button onClick={nextDemoStep} className="px-3 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">다음</button>
                   <button onClick={handleStopDemo} className="px-3 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600">종료</button>
@@ -901,10 +1012,10 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.18 }}
-                className="absolute bottom-36 left-1/2 -translate-x-1/2 bg-white/95 px-5 py-3 rounded-2xl shadow-lg border border-neutral-100 text-sm font-medium text-neutral-700 flex items-center gap-3 pointer-events-auto"
+                className="absolute bottom-36 left-1/2 -translate-x-1/2 flex w-[calc(100vw-20px)] max-w-[48rem] flex-col items-center gap-2 rounded-2xl border border-neutral-100 bg-white/95 px-3 py-3 text-sm font-medium text-neutral-700 shadow-lg pointer-events-auto sm:flex-row sm:gap-3 sm:px-5"
               >
-                <div className="max-w-[48ch] text-center">{getSquareDemoText(squareDemoStep)}</div>
-                <div className="ml-2 flex items-center gap-2">
+                <div className="w-full text-center sm:max-w-[48ch]">{getSquareDemoText(squareDemoStep)}</div>
+                <div className="flex w-full items-center justify-center gap-2 sm:ml-2 sm:w-auto">
                   <button onClick={() => prevSquareStep(setSquareDemoStep)} className="px-3 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200">이전</button>
                   <button onClick={() => nextSquareStep(setSquareDemoStep)} className="px-3 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">다음</button>
                   <button onClick={() => stopSquareDemo({ setSquareDemoMode, setSquareDemoStep, squareDemoIntervalRef })} className="px-3 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600">종료</button>
@@ -915,7 +1026,7 @@ export default function App() {
         )}
 
         {/* Floating Toolbar */}
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-4 bg-white/80 backdrop-blur-xl px-6 py-3 rounded-3xl shadow-2xl border border-neutral-200/50">
+        <div className="relative mx-auto mt-2.5 mb-[calc(3rem+5px+env(safe-area-inset-bottom))] sm:mb-0 sm:absolute sm:bottom-10 sm:left-1/2 sm:-translate-x-1/2 z-30 flex w-[calc(100vw-20px)] max-w-max flex-wrap items-center justify-center gap-2 sm:gap-4 bg-white/80 backdrop-blur-xl px-3 sm:px-6 py-2 sm:py-3 rounded-3xl shadow-2xl border border-neutral-200/50">
           <div className="flex items-center gap-2">
             <button 
               onClick={() => setShowGrid(!showGrid)}
@@ -926,7 +1037,7 @@ export default function App() {
             </button>
           </div>
           <div className="w-px h-8 bg-neutral-200" />
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Zoom</span>
             <input aria-label='input'
               type="range" 
@@ -935,7 +1046,7 @@ export default function App() {
               step="0.1" 
               value={zoom} 
               onChange={(e) => setZoom(parseFloat(e.target.value))}
-              className="w-32 accent-indigo-600"
+              className="w-24 sm:w-32 accent-indigo-600"
             />
           </div>
           <div className="w-px h-8 bg-neutral-200" />
@@ -960,6 +1071,7 @@ export default function App() {
         </div>
 
         {/* demo button now in toolbar; centered demo button removed */}
+        </div>
       </main>
 
       <style dangerouslySetInnerHTML={{ __html: `

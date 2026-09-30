@@ -346,12 +346,13 @@ export function applySquareEdit(newPaths: Record<number, Point[]>, activePoint: 
 export function renderSquareControls(params: {
   ei: number;
   points: Point[];
+  displayPoints?: Point[];
   activePoint: { edgeIdx: number; pointIdx: number } | null;
   triSymmetry: 'cw' | 'ccw';
   transformType: 'rotate90' | 'translate' | 'glide';
   handleMouseDown: (edgeIdx: number, pointIdx: number) => void;
 }) {
-  const { ei, points, activePoint, triSymmetry, transformType, handleMouseDown } = params;
+  const { ei, points, displayPoints = points, activePoint, triSymmetry, transformType, handleMouseDown } = params;
   const driven = 3; // bottom edge
   const paired = triSymmetry === 'cw' ? (driven + 1) % 4 : (driven + 3) % 4;
   const leftIdx = 2;
@@ -361,6 +362,7 @@ export function renderSquareControls(params: {
   return (
     <g key={String(ei)}>
       {points.map((p, pointIdx) => {
+        const displayPoint = displayPoints[pointIdx] ?? p;
         const isDriven = ei === driven;
         const isPaired = ei === paired;
         const isLeft = ei === leftIdx;
@@ -378,8 +380,8 @@ export function renderSquareControls(params: {
         return (
           <motion.circle
             key={pointIdx}
-            cx={p.x}
-            cy={p.y}
+            cx={displayPoint.x}
+            cy={displayPoint.y}
             r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
             initial={false}
             animate={{ r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8, fill }}

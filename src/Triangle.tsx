@@ -326,11 +326,12 @@ export default Triangle;
 export function renderTriangleControls(params: {
   ei: number;
   points: Point[];
+  displayPoints?: Point[];
   activePoint: { edgeIdx: number; pointIdx: number } | null;
   triSymmetry: 'cw' | 'ccw';
   handleMouseDown: (edgeIdx: number, pointIdx: number) => void;
 }) {
-  const { ei, points, activePoint, triSymmetry, handleMouseDown } = params;
+  const { ei, points, displayPoints = points, activePoint, triSymmetry, handleMouseDown } = params;
   const driven = 1;
   const paired = triSymmetry === 'cw' ? (driven + 2) % 3 : (driven + 1) % 3;
   const spare = [0,1,2].find(x => x !== driven && x !== paired)!;
@@ -341,6 +342,7 @@ export function renderTriangleControls(params: {
   return (
     <g key={String(ei)}>
       {points.map((p, pointIdx) => {
+        const displayPoint = displayPoints[pointIdx] ?? p;
         const isDriven = ei === driven;
         const isPaired = ei === paired;
         const isSpare = ei === spare;
@@ -352,8 +354,8 @@ export function renderTriangleControls(params: {
         return (
           <motion.circle
             key={pointIdx}
-            cx={p.x}
-            cy={p.y}
+            cx={displayPoint.x}
+            cy={displayPoint.y}
             r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
             initial={false}
             animate={{ r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8, fill }}

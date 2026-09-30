@@ -172,13 +172,14 @@ export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint:
 export function renderHexagonControls(params: {
   ei: number;
   points: Point[];
+  displayPoints?: Point[];
   activePoint: { edgeIdx: number; pointIdx: number } | null;
   transformType: 'rotate120' | 'translate' | 'glide' | 'free';
   handleMouseDown: (edgeIdx: number, pointIdx: number) => void;
   baseVertices?: Point[];
   onAddPoint?: (edgeIdx: number, clientX: number, clientY: number) => void;
 }) {
-  const { ei, points, activePoint, transformType, handleMouseDown, baseVertices, onAddPoint } = params;
+  const { ei, points, displayPoints = points, activePoint, transformType, handleMouseDown, baseVertices, onAddPoint } = params;
   // Interactive control edges:
   // - rotate120: odd edges (1,3,5) are interactive; pairs are even edges (0,2,4)
   // - translate/glide: interactive edges are 1,3,5 and paired are opposite edges (i+3)%6
@@ -213,6 +214,7 @@ export function renderHexagonControls(params: {
         />
       )}
       {points.map((p, pointIdx) => {
+        const displayPoint = displayPoints[pointIdx] ?? p;
         // determine pairedness
         // - In `rotate120` mode the even edges are considered paired/non-interactive
         //   (they mirror the odd interactive edges via rotation rules).
@@ -238,8 +240,8 @@ export function renderHexagonControls(params: {
         return (
           <motion.circle
             key={pointIdx}
-            cx={p.x}
-            cy={p.y}
+            cx={displayPoint.x}
+            cy={displayPoint.y}
             r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
             initial={false}
             animate={{ r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8, fill }}
