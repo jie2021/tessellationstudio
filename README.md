@@ -37,13 +37,41 @@ npm run build
 npm run start
 ```
 
+## Desktop App (Electron)
+Run the Next.js development server and Electron shell together:
+
+```bash
+npm run dev:desktop
+```
+
+Create a Windows NSIS installer:
+
+```bash
+npm run build:desktop
+```
+
+The installer is written to `dist/`.
+
+## Android App (Capacitor)
+Build the static web assets and synchronize them into the Android project:
+
+```bash
+npm run cap:sync
+```
+
+Open the project in Android Studio or run it on a connected device:
+
+```bash
+npm run android:open
+npm run android:run
+```
+
+Android builds require Android Studio, the Android SDK, and a valid JDK. Set
+`JAVA_HOME` to the installed JDK directory before running Gradle or
+`npm run android:run`.
+
 ## Other scripts
-- `npm run clean` — remove Next build output
-- `npm run lint` — run TypeScript type check
 
 ## Notes
-- The Next entry page is `pages/index.tsx` which imports the existing app component at `src/App.tsx`.
-- Tailwind is configured via `tailwind.config.cjs` and `postcss.config.cjs`; global CSS is at `src/index.css` and imported from `pages/_app.tsx`.
-- If you downgraded React to satisfy Next's peer dependency, ensure `react` and `react-dom` are `^18.2.0` in `package.json`.
 
 If you want, I can run `npm install` here or switch the project to use `pnpm`/`yarn` to avoid peer-resolution issues.

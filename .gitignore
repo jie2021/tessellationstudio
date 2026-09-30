@@ -8,3 +8,5 @@ coverage/
 !.env.example
 .next/
 next-env.d.ts
+/android/
+/out/
