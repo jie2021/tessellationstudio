@@ -19,18 +19,16 @@ import {
   Palette,
   Move,
   Info,
-  Grid3X3,
-  Menu,
-  X,
-  Lock,
-  Unlock,
-  ChevronDown,
-  ChevronUp
+  X
 } from 'lucide-react';
 
-import SquareShape, { applySquareEdit, Point as SquarePoint, buildSquareDemoTiles, renderSquareControls, startSquareDemo, stopSquareDemo, nextSquareStep, prevSquareStep, getSquareDemoText as squareGetDemoText, squareAutoAdvance } from './Square';
-import HexagonShape, { applyHexagonEdit, renderHexagonControls, startHexagonDemo, stopHexagonDemo, nextHexagonStep, prevHexagonStep, getHexagonDemoText, hexagonAutoAdvance } from './Hexagon';
-import TriangleShape, { initTrianglePaths, applyTriangleEdit, Point as TriPoint, startTriangleDemo, stopTriangleDemo, renderTriangleControls, nextTriangleStep, prevTriangleStep, getTriangleDemoText, triangleAutoAdvance } from './Triangle';
+import { applySquareEdit, Point as SquarePoint, buildSquareDemoTiles, startSquareDemo, stopSquareDemo, nextSquareStep, prevSquareStep, getSquareDemoText as squareGetDemoText, squareAutoAdvance } from './Square';
+import { applyHexagonEdit, startHexagonDemo, stopHexagonDemo, nextHexagonStep, prevHexagonStep, getHexagonDemoText, hexagonAutoAdvance } from './Hexagon';
+import { initTrianglePaths, applyTriangleEdit, Point as TriPoint, startTriangleDemo, stopTriangleDemo, nextTriangleStep, prevTriangleStep, getTriangleDemoText, triangleAutoAdvance } from './Triangle';
+import EditorOverlay from './EditorOverlay';
+import FloatingToolbar from './FloatingToolbar';
+import MobileHeader from './MobileHeader';
+import PatternPreview from './PatternPreview';
 
 // --- Types ---
 
@@ -113,28 +111,6 @@ const serializePatternSvg = (svgEl: SVGSVGElement) => {
     svgText: new XMLSerializer().serializeToString(clone),
     width: exportWidth,
     height: exportHeight,
-  };
-};
-
-const getCurveDisplayPoint = (start: Point, end: Point, controls: Point[], pointIdx: number, useCurve: boolean): Point => {
-  if (!useCurve || controls.length === 0) return controls[pointIdx];
-
-  const t = (pointIdx + 1) / (controls.length + 1);
-  if (controls.length === 1) {
-    const control = controls[0];
-    const inverseT = 1 - t;
-    return {
-      x: inverseT * inverseT * start.x + 2 * inverseT * t * control.x + t * t * end.x,
-      y: inverseT * inverseT * start.y + 2 * inverseT * t * control.y + t * t * end.y,
-    };
-  }
-
-  const firstControl = controls[0];
-  const lastControl = controls[controls.length - 1];
-  const inverseT = 1 - t;
-  return {
-    x: inverseT ** 3 * start.x + 3 * inverseT ** 2 * t * firstControl.x + 3 * inverseT * t ** 2 * lastControl.x + t ** 3 * end.x,
-    y: inverseT ** 3 * start.y + 3 * inverseT ** 2 * t * firstControl.y + 3 * inverseT * t ** 2 * lastControl.y + t ** 3 * end.y,
   };
 };
 
@@ -320,12 +296,30 @@ export default function App() {
 
   const getSquareDemoText = (step: number) => squareGetDemoText(step, transformType as 'rotate90' | 'translate' | 'glide');
 
-  const handleMouseDown = (edgeIdx: number, pointIdx: number) => {
+  const handleStartDemo = useCallback(() => {
+    if (shapeType === 'triangle') {
+      startTriangleDemo({ setShapeType, setDemoCenters, setDemoMode, setDemoStep, demoIntervalRef, RADIUS });
+    } else if (shapeType === 'square') {
+      startSquareDemo({ setShapeType, setSquareDemoMode, setSquareDemoStep, setShowEditor });
+    } else {
+      startHexagonDemo({
+        setShapeType,
+        setDemoCenters,
+        setDemoMode,
+        setDemoStep,
+        demoIntervalRef,
+        RADIUS,
+        transformType: transformType as 'rotate120' | 'translate' | 'glide' | 'free',
+      });
+    }
+  }, [shapeType, transformType]);
+
+  const handleMouseDown = useCallback((edgeIdx: number, pointIdx: number) => {
     editorRectRef.current = document.getElementById('editor-svg')?.getBoundingClientRect() ?? null;
     const nextActivePoint = { edgeIdx, pointIdx };
     activePointRef.current = nextActivePoint;
     setActivePoint(nextActivePoint);
-  };
+  }, []);
 
   const updateDraggedPoint = useCallback((clientX: number, clientY: number) => {
     const ap = activePointRef.current;
@@ -391,7 +385,7 @@ export default function App() {
     });
   }, [updateDraggedPoint]);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     if (dragFrameRef.current !== null) {
       window.cancelAnimationFrame(dragFrameRef.current);
       dragFrameRef.current = null;
@@ -402,7 +396,7 @@ export default function App() {
     editorRectRef.current = null;
     activePointRef.current = null;
     setActivePoint(null);
-  };
+  }, [updateDraggedPoint]);
 
   // Add a control point to a free-mode hexagon edge through its context-menu gesture.
   // Inserts the new point sorted by its projection (t) along the edge,
@@ -452,6 +446,10 @@ export default function App() {
       }
       return newPaths;
     });
+  }, []);
+
+  const handleToggleEditor = useCallback(() => {
+    setShowEditor((visible) => !visible);
   }, []);
   const tilePathData = useMemo(() => {
     if (baseVertices.length === 0) return '';
@@ -781,193 +779,52 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 relative flex flex-col bg-white lg:h-screen lg:overflow-hidden">
-        <div className="relative z-30 flex items-center justify-between border-b border-neutral-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
-          <button
-            type="button"
-            aria-label="메뉴 열기"
-            aria-expanded={isMenuOpen}
-            onClick={() => setIsMenuOpen(true)}
-            className="rounded-xl p-2 text-neutral-700 transition-colors hover:bg-neutral-100"
-          >
-            <Menu size={24} />
-          </button>
-          <span className="text-sm font-bold tracking-tight text-neutral-900">
-            Tessellation <span className="text-indigo-600">Studio</span>
-          </span>
-          <button
-            type="button"
-            aria-label={isPageScrollLocked ? '페이지 스크롤 잠금 해제' : '페이지 스크롤 잠금'}
-            aria-pressed={isPageScrollLocked}
-            title={isPageScrollLocked ? '페이지 스크롤 잠금 해제' : '페이지 스크롤 잠금'}
-            onClick={() => setIsPageScrollLocked((locked) => !locked)}
-            className={`rounded-xl p-2 transition-colors ${isPageScrollLocked ? 'bg-indigo-100 text-indigo-600' : 'text-neutral-700 hover:bg-neutral-100'}`}
-          >
-            {isPageScrollLocked ? <Lock size={21} /> : <Unlock size={21} />}
-          </button>
-        </div>
-        {/* Tessellation Preview (Background) */}
-        <div className="absolute inset-0 z-0 overflow-hidden bg-neutral-50">
-          <svg id="tessellation-svg" className="w-full h-full transition-opacity duration-500">
-              <defs>
-                <path id="tessellation-tile" d={tilePathData} />
-              </defs>
-              <g transform={`translate(${offset.x}, ${offset.y}) scale(${zoom})`}>
-                {shapeType === 'square' && (
-                  squareDemoMode ? squareDemoTiles : (
-                    <SquareShape colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={TRI_SYMMETRY} transformType={transformType as 'rotate90' | 'translate' | 'glide'} viewBounds={viewBounds} />
-                  )
-                )}
-                {shapeType === 'hexagon' && (
-                  <HexagonShape colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} transformType={transformType as 'rotate120' | 'translate' | 'glide' | 'free'} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} viewBounds={viewBounds} />
-                )}
-                {shapeType === 'triangle' && (
-                  <TriangleShape colorA={colorA} colorB={colorB} RADIUS={RADIUS} CENTER={CENTER} triSymmetry={TRI_SYMMETRY} demoMode={demoMode} demoStep={demoStep} demoCenters={demoCenters} viewBounds={viewBounds} />
-                )}
-              </g>
-          </svg>
-        </div>
+        <MobileHeader
+          isMenuOpen={isMenuOpen}
+          isPageScrollLocked={isPageScrollLocked}
+          setIsMenuOpen={setIsMenuOpen}
+          setIsPageScrollLocked={setIsPageScrollLocked}
+        />
+        <PatternPreview
+          tilePathData={tilePathData}
+          shapeType={shapeType}
+          transformType={transformType}
+          colorA={colorA}
+          colorB={colorB}
+          radius={RADIUS}
+          center={CENTER}
+          offset={offset}
+          zoom={zoom}
+          viewBounds={viewBounds}
+          demoMode={demoMode}
+          demoStep={demoStep}
+          demoCenters={demoCenters}
+          squareDemoMode={squareDemoMode}
+          squareDemoTiles={squareDemoTiles}
+        />
 
         <div className="flex min-h-0 flex-1 flex-col items-center justify-end lg:contents">
         {/* Editor Overlay (hidden during demo and during square demo) */}
         {!demoMode && !squareDemoMode && (
-          <div className={`flex-none lg:flex-1 flex items-center justify-center z-10 p-2.5 sm:p-8 lg:pointer-events-none ${isPageScrollLocked ? 'touch-none' : ''}`}>
-            <div className="relative pointer-events-auto w-[calc(100vw-20px)] max-w-[464px] sm:w-auto">
-            <AnimatePresence mode="wait">
-              {showEditor && (
-              <motion.div 
-                key={shapeType}
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: -20 }}
-                transition={{ type: 'spring', damping: 20, stiffness: 100 }}
-                className="w-full bg-white/10 backdrop-blur-xl p-2.5 sm:p-8 rounded-[40px] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.1)] border border-white/50"
-              >
-                <svg 
-                  id="editor-svg"
-                  width={CANVAS_SIZE} 
-                  height={CANVAS_SIZE} 
-                  className="w-full h-auto cursor-crosshair overflow-visible"
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
-                  onTouchMove={handleMouseMove}
-                  onTouchEnd={handleMouseUp}
-                  onContextMenu={e => e.preventDefault()}
-                >
-                  {/* Base Grid Lines */}
-                  {showGrid && (
-                    <g className="stroke-neutral-200 stroke-1">
-                      {baseVertices.map((v, i) => {
-                        const nextV = baseVertices[(i + 1) % baseVertices.length];
-                        return <line key={i} x1={v.x} y1={v.y} x2={nextV.x} y2={nextV.y} strokeDasharray="8 8" />;
-                      })}
-                    </g>
-                  )}
-
-                  {/* The Shape Path */}
-                  <path 
-                    d={tilePathData} 
-                    fill={colorA} 
-                    fillOpacity="0.15"
-                    stroke={colorA} 
-                    strokeWidth="4"
-                    strokeLinejoin="round"
-                    className="transition-colors duration-300"
-                  />
-
-                  {/* Control Points */}
-                  {Object.entries(currentEdgePaths).map(([edgeIdx, points]) => {
-                    const ei = Number(edgeIdx);
-
-                    if (shapeType === 'triangle') {
-                      const edgeStart = baseVertices[ei];
-                      const edgeEnd = baseVertices[(ei + 1) % baseVertices.length];
-                      const displayPoints = (points as Point[]).map((point, pointIdx) => getCurveDisplayPoint(edgeStart, edgeEnd, points as Point[], pointIdx, useCurve));
-                      return renderTriangleControls({ ei, points: points as Point[], displayPoints, activePoint, triSymmetry: TRI_SYMMETRY, handleMouseDown });
-                    }
-
-                    // Non-triangle shapes: special-case square so bottom edge is draggable
-                    // and the paired edge is shown orange and non-interactive
-                    if (shapeType === 'square') {
-                      const edgeStart = baseVertices[ei];
-                      const edgeEnd = baseVertices[(ei + 1) % baseVertices.length];
-                      const displayPoints = (points as Point[]).map((point, pointIdx) => getCurveDisplayPoint(edgeStart, edgeEnd, points as Point[], pointIdx, useCurve));
-                      return renderSquareControls({ ei, points: points as Point[], displayPoints, activePoint, triSymmetry: TRI_SYMMETRY, transformType: transformType as 'rotate90' | 'translate' | 'glide', handleMouseDown });
-                    }
-
-                    // Hexagon-specific controls
-                    if (shapeType === 'hexagon') {
-                      const edgeStart = baseVertices[ei];
-                      const edgeEnd = baseVertices[(ei + 1) % baseVertices.length];
-                      const displayPoints = (points as Point[]).map((point, pointIdx) => getCurveDisplayPoint(edgeStart, edgeEnd, points as Point[], pointIdx, useCurve));
-                      return renderHexagonControls({
-                        ei,
-                        points: points as Point[],
-                        displayPoints,
-                        activePoint,
-                        transformType: transformType as any,
-                        handleMouseDown,
-                        baseVertices,
-                        onAddPoint: transformType === 'free' ? handleAddHexagonPoint : undefined,
-                      });
-                    }
-
-                    // Fallback for other non-triangle shapes
-                    return (
-                      <g key={edgeIdx}>
-                        {(points as Point[]).map((p, pointIdx) => (
-                          <motion.circle
-                            key={pointIdx}
-                            cx={p.x}
-                            cy={p.y}
-                            r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
-                            initial={false}
-                            animate={{
-                              r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8,
-                              fill: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? '#4f46e5' : '#6366f1'
-                            }}
-                            className={`stroke-white stroke-[3px] shadow-lg ${
-                              activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none opacity-50 cursor-default' :
-                              'cursor-move'
-                            }`}
-                            onMouseDown={() => handleMouseDown(ei, pointIdx)}
-                            onTouchStart={() => handleMouseDown(ei, pointIdx)}
-                          />
-                        ))}
-                      </g>
-                    );
-                  })}
-
-                  {/* Vertices (Static) */}
-                  {baseVertices.map((v, i) => (
-                    <rect
-                      key={i}
-                      x={v.x - 5}
-                      y={v.y - 5}
-                      width={10}
-                      height={10}
-                      rx={2}
-                      className="fill-neutral-300"
-                    />
-                  ))}
-                </svg>
-              </motion.div>
-              )}
-            </AnimatePresence>
-            
-            <button
-              type="button"
-              onClick={() => setShowEditor((visible) => !visible)}
-              aria-expanded={showEditor}
-              aria-label={showEditor ? '기본 도형 편집기 접기' : '기본 도형 편집기 펼치기'}
-              className="absolute -top-14 left-1/2 -translate-x-1/2 flex items-center gap-2 whitespace-nowrap bg-white px-5 py-2.5 rounded-full shadow-xl border border-neutral-100 text-[12px] font-black tracking-[0.2em] text-neutral-400 uppercase transition-colors hover:text-indigo-600"
-            >
-              <Move size={12} className="text-indigo-600" />
-              기본 도형 편집기
-              {showEditor ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
-            </div>
-          </div>
+          <EditorOverlay
+            canvasSize={CANVAS_SIZE}
+            shapeType={shapeType}
+            transformType={transformType}
+            colorA={colorA}
+            tilePathData={tilePathData}
+            baseVertices={baseVertices}
+            currentEdgePaths={currentEdgePaths}
+            activePoint={activePoint}
+            showGrid={showGrid}
+            showEditor={showEditor}
+            useCurve={useCurve}
+            isPageScrollLocked={isPageScrollLocked}
+            onToggleEditor={handleToggleEditor}
+            onPointerDown={handleMouseDown}
+            onPointerMove={handleMouseMove}
+            onPointerUp={handleMouseUp}
+            onAddHexagonPoint={handleAddHexagonPoint}
+          />
         )}
 
         {/* Demo explanatory overlay (fixed bottom-center; no vertical animation) */}
@@ -1016,50 +873,15 @@ export default function App() {
           </div>
         )}
 
-        {/* Floating Toolbar */}
-        <div className="relative mx-auto mt-2.5 mb-[calc(3rem+5px+env(safe-area-inset-bottom))] sm:mb-0 sm:absolute sm:bottom-10 sm:left-1/2 sm:-translate-x-1/2 z-30 flex w-[calc(100vw-20px)] max-w-max flex-wrap items-center justify-center gap-2 sm:gap-4 bg-white/80 backdrop-blur-xl px-3 sm:px-6 py-2 sm:py-3 rounded-3xl shadow-2xl border border-neutral-200/50">
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setShowGrid(!showGrid)}
-              className={`p-2.5 rounded-xl transition-all ${showGrid ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-neutral-400 hover:bg-neutral-100'}`}
-              title="가이드 라인 토글"
-            >
-              <Grid3X3 size={20} />
-            </button>
-          </div>
-          <div className="w-px h-8 bg-neutral-200" />
-          <div className="flex items-center gap-2 sm:gap-4">
-            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Zoom</span>
-            <input aria-label='input'
-              type="range" 
-              min="0.5" 
-              max="2" 
-              step="0.1" 
-              value={zoom} 
-              onChange={(e) => setZoom(parseFloat(e.target.value))}
-              className="w-24 sm:w-32 accent-indigo-600"
-            />
-          </div>
-          <div className="w-px h-8 bg-neutral-200" />
-          <div className="w-px h-8 bg-neutral-200" />
-          {!demoMode && (
-            <button
-              onClick={() => {
-                if (shapeType === 'triangle') startTriangleDemo({ setShapeType, setDemoCenters, setDemoMode, setDemoStep, demoIntervalRef, RADIUS });
-                else if (shapeType === 'square') startSquareDemo({ setShapeType, setSquareDemoMode, setSquareDemoStep, setShowEditor });
-                else if (shapeType === 'hexagon') startHexagonDemo({ setShapeType, setDemoCenters, setDemoMode, setDemoStep, demoIntervalRef, RADIUS, transformType: transformType as 'rotate120' | 'translate' | 'glide' | 'free' });
-              }}
-              className="px-3 py-2 rounded-full font-bold text-sm transition bg-indigo-600 text-white hover:bg-indigo-700"
-              title="설명하기"
-            >
-              설명하기
-            </button>
-          )}
-
-          <p className="text-xs font-bold text-neutral-700 whitespace-nowrap">
-            {shapeType === 'triangle' ? '정삼각형' : shapeType === 'square' ? '정사각형' : '정육각형'} 패턴
-          </p>
-        </div>
+        <FloatingToolbar
+          showGrid={showGrid}
+          setShowGrid={setShowGrid}
+          zoom={zoom}
+          setZoom={setZoom}
+          shapeType={shapeType}
+          demoMode={demoMode}
+          onStartDemo={handleStartDemo}
+        />
 
         </div>
       </main>
