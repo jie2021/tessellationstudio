@@ -1,5 +1,9 @@
 # Tessellation Studio
 
+## Application Manuals
+
+- [Windows Electron app manual](docs/WINDOWS-ELECTRON-MANUAL.md)
+- [Android Capacitor app manual](docs/ANDROID-CAPACITOR-MANUAL.md)
 
 ## Prerequisites
 - Node.js 18+ (recommended)

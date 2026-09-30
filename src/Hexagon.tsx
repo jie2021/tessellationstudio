@@ -1,15 +1,15 @@
 // Hexagon.tsx
 // Hexagon-specific rendering and editing helpers.
 // - `applyHexagonEdit` maps edits on interactive edges to their paired edges
-//   according to the active `transformType` ('rotate120' | 'translate' | 'glide').
+//   according to the active `transformType` ('rotate120' | 'translate' | 'glide' | 'free').
 //   It computes along-edge projection (t) and signed normal distance (d) and
 //   applies translation, rotation-mapping, or glide (mirror+translation)
 //   strategies to update the paired control point(s).
 // - `renderHexagonControls` exposes the appropriate interactive edges and
 //   paints paired/non-interactive edges differently to communicate which
 //   controls affect which paired edges.
-// - The default `Hexagon` component builds demo tiles for rotate/translate/glide
-//   modes and provides the `startHexagonDemo`/`stopHexagonDemo` helpers.
+// - The default `Hexagon` component builds demo tiles for every transform mode
+//   and provides the `startHexagonDemo`/`stopHexagonDemo` helpers.
 import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
 
@@ -126,8 +126,8 @@ export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint:
   const plen = Math.sqrt(pex*pex + pey*pey) || 1;
   // decide mapping depending on mappingMode
   if (mappingMode === 'rotate120') {
-    // rotation-based mapping: flip the along-edge parameter (`tPaired = 1-t`)
-    // and invert the normal offset so that the rotated piece sits on the
+    // Rotation mapping reverses the along-edge parameter (`tPaired = 1-t`)
+    // and negates the normal offset so that the rotated piece sits on the
     // opposite side of the paired edge. This is a heuristic that approximates
     // the 120° rotational pairing used by the rotate120 tiling.
     const tPaired = 1 - t;
@@ -154,7 +154,7 @@ export function applyHexagonEdit(newPaths: Record<number, Point[]>, activePoint:
     const target = { x: pairedMidX + deltaX, y: pairedMidY + deltaY };
     newPaths[paired] = [{ x: target.x, y: target.y }];
   } else if (mappingMode === 'glide') {
-    // glide: preserve the along-edge parameter `t` but invert the normal offset
+    // Glide reflection preserves the along-edge parameter `t` but negates the normal offset
     // to produce the mirror component, then place the mirrored point on the
     // paired edge. This implements a reflection+translation mapping used by
     // glide-reflection tilings.
@@ -194,7 +194,7 @@ export function renderHexagonControls(params: {
 
   return (
     <g key={String(ei)}>
-      {/* Hit-area line: right-click to add a control point (free mode only) */}
+      {/* Wider hit area for adding a free-mode point via right-click or long-press. */}
       {transformType === 'free' && isInteractiveEdge && baseVertices && onAddPoint && (
         <line
           x1={baseVertices[ei].x}
@@ -681,7 +681,6 @@ function HexagonInner({ tilePathData, colorA, colorB, RADIUS, CENTER, range = 20
           />
         );
       }
-      // labels removed for glide demo (numeric index, pixel distance, axial steps)
     }
     
     }

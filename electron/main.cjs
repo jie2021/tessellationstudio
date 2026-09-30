@@ -4,6 +4,8 @@ const { pathToFileURL } = require('node:url');
 
 const isDevelopment = !app.isPackaged;
 
+// Treat app:// as a secure web origin so Next's root-relative /_next assets
+// resolve inside the packaged out directory instead of against the file system root.
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'app',
@@ -23,6 +25,7 @@ function registerAppProtocol() {
     const relativePath = decodeURIComponent(url.pathname).replace(/^\/+/, '') || 'index.html';
     const filePath = path.resolve(outDirectory, relativePath);
 
+    // Reject path traversal before handing the resolved file to Electron's network stack.
     if (filePath !== outDirectory && !filePath.startsWith(`${outDirectory}${path.sep}`)) {
       return new Response('Not found', { status: 404 });
     }

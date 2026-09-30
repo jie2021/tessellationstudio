@@ -6,8 +6,8 @@
 // - `applyTriangleEdit`: when the driven edge is moved, computes corresponding
 //   mirrored updates to the paired edge; when the spare edge control is moved,
 //   it mirrors the other spare control across that edge's midpoint.
-// - Demo helpers (`startDemo`, `stopDemo`, `next/prevTriangleStep`, etc.)
-//   assemble rotation-based explanations and reveal surrounding hexes.
+// - Demo helpers (`startTriangleDemo`, `stopTriangleDemo`, step navigation, etc.)
+//   assemble rotation-based explanations and reveal translated tile patches.
 import React from 'react';
 import { motion } from 'motion/react';
 
@@ -84,7 +84,7 @@ export function applyTriangleEdit(newPaths: Record<number, Point[]>, activePoint
     const pv1 = baseVertices[(paired + 1) % 3];
 
     const drivenPts = newPaths[driven];
-    // For each control on the driven edge compute its along-edge parameter `t`
+    // For each control point on the driven edge, compute its along-edge parameter `t`
     // and signed normal offset `d`. The paired edge receives the reversed
     // along-edge parameter (1 - t) and the negated normal offset so that the
     // mirrored piece sits consistently in the assembled patch.

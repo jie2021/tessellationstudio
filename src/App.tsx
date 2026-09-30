@@ -5,8 +5,8 @@
 // - Delegates shape-specific editing, demo steps, and control rendering to
 //   `Square.tsx`, `Hexagon.tsx`, and `Triangle.tsx` helper exports.
 // - Exposes export-to-PNG logic which inlines computed styles before rasterizing.
-// NOTE: This file contains only UI wiring and shared utilities; shape-specific
-// behavior (paired-edge updates, demo assembly) lives in the shape modules.
+// Shape-specific behavior (paired-edge updates and demo assembly) lives in the
+// shape modules; this file owns shared SVG path generation and UI coordination.
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -313,7 +313,7 @@ export default function App() {
   };
 
   // handleMouseMove reads all volatile values from refs so the callback
-  // identity never changes, eliminating re-bindung of SVG event handlers
+  // identity never changes, eliminating re-binding of SVG event handlers
   // on every drag frame.
   const handleMouseMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     const ap = activePointRef.current;
@@ -374,7 +374,7 @@ export default function App() {
 
   const handleMouseUp = () => setActivePoint(null);
 
-  // Add a control point to a free-mode hexagon edge on right-click.
+  // Add a control point to a free-mode hexagon edge through its context-menu gesture.
   // Inserts the new point sorted by its projection (t) along the edge,
   // then rotates all interactive-edge points to update the paired edge.
   const handleAddHexagonPoint = useCallback((edgeIdx: number, clientX: number, clientY: number) => {
@@ -652,8 +652,6 @@ export default function App() {
             </section>
           )}
 
-          {/* triangle symmetry option removed; default clockwise */}
-
           <section className="space-y-4">
             <label className="text-[11px] font-bold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
               <Info size={14} /> {shapeType === 'square'|| shapeType === 'hexagon' ? '5' : '4'}. 사용 방법
@@ -673,7 +671,6 @@ export default function App() {
                 <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">3</div>
                 <p className="text-xs text-neutral-600 leading-relaxed">완성된 패턴을 저장하거나 초기화할 수 있습니다.</p>
               </div>
-              {/* demo button removed from sidebar per request */}
             </div>
           </section>
         </div>
@@ -1070,7 +1067,6 @@ export default function App() {
           </p>
         </div>
 
-        {/* demo button now in toolbar; centered demo button removed */}
         </div>
       </main>
 
