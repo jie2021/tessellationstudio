@@ -22,7 +22,7 @@ import {
   X
 } from 'lucide-react';
 
-import { applySquareEdit, Point as SquarePoint, buildSquareDemoTiles, startSquareDemo, stopSquareDemo, nextSquareStep, prevSquareStep, getSquareDemoText as squareGetDemoText, squareAutoAdvance } from './Square';
+import { applySquareEdit, mapSquareRotatedPoints, Point as SquarePoint, buildSquareDemoTiles, startSquareDemo, stopSquareDemo, nextSquareStep, prevSquareStep, getSquareDemoText as squareGetDemoText, squareAutoAdvance } from './Square';
 import { applyHexagonEdit, startHexagonDemo, stopHexagonDemo, nextHexagonStep, prevHexagonStep, getHexagonDemoText, hexagonAutoAdvance } from './Hexagon';
 import { initTrianglePaths, applyTriangleEdit, Point as TriPoint, startTriangleDemo, stopTriangleDemo, nextTriangleStep, prevTriangleStep, getTriangleDemoText, triangleAutoAdvance } from './Triangle';
 import EditorOverlay from './EditorOverlay';
@@ -448,6 +448,38 @@ export default function App() {
     });
   }, []);
 
+  const handleAddSquarePoint = useCallback((edgeIdx: number, clientX: number, clientY: number) => {
+    const svg = document.getElementById('editor-svg');
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const x = (clientX - rect.left) * (CANVAS_SIZE / rect.width);
+    const y = (clientY - rect.top) * (CANVAS_SIZE / rect.height);
+
+    const bv = baseVerticesRef.current as SquarePoint[];
+    const v0 = bv[edgeIdx];
+    const v1 = bv[(edgeIdx + 1) % 4];
+    const ex = v1.x - v0.x;
+    const ey = v1.y - v0.y;
+    const len2 = ex * ex + ey * ey || 1;
+    const tNew = ((x - v0.x) * ex + (y - v0.y) * ey) / len2;
+
+    setEdgePaths(() => {
+      const newPaths = { ...currentEdgePathsRef.current };
+      const points = [...(newPaths[edgeIdx] || [])];
+      let insertIdx = points.length;
+      for (let i = 0; i < points.length; i++) {
+        const ti = ((points[i].x - v0.x) * ex + (points[i].y - v0.y) * ey) / len2;
+        if (tNew < ti) { insertIdx = i; break; }
+      }
+      points.splice(insertIdx, 0, { x, y });
+      newPaths[edgeIdx] = points;
+
+      const mapping = mapSquareRotatedPoints(edgeIdx, points, bv, TRI_SYMMETRY);
+      if (mapping) newPaths[mapping.paired] = mapping.points;
+      return newPaths;
+    });
+  }, []);
+
   const handleToggleEditor = useCallback(() => {
     setShowEditor((visible) => !visible);
   }, []);
@@ -470,6 +502,19 @@ export default function App() {
         if (points.length === 1) {
           // Quadratic Bezier: one control point
           d += ` Q ${points[0].x} ${points[0].y} ${v2.x} ${v2.y}`;
+        } else if (shapeType === 'square' && transformType === 'rotate90' && points.length >= 2) {
+          const midpoint = (a: Point, b: Point) => ({
+            x: (a.x + b.x) / 2,
+            y: (a.y + b.y) / 2,
+          });
+
+          d += ` Q ${points[0].x} ${points[0].y} ${midpoint(points[0], points[1]).x} ${midpoint(points[0], points[1]).y}`;
+          for (let pointIdx = 1; pointIdx < points.length - 1; pointIdx++) {
+            const nextMidpoint = midpoint(points[pointIdx], points[pointIdx + 1]);
+            d += ` Q ${points[pointIdx].x} ${points[pointIdx].y} ${nextMidpoint.x} ${nextMidpoint.y}`;
+          }
+          const lastPoint = points[points.length - 1];
+          d += ` Q ${lastPoint.x} ${lastPoint.y} ${v2.x} ${v2.y}`;
         } else if (points.length >= 2) {
           // Cubic Bezier: two control points
           d += ` C ${points[0].x} ${points[0].y} ${points[points.length - 1].x} ${points[points.length - 1].y} ${v2.x} ${v2.y}`;
@@ -484,7 +529,7 @@ export default function App() {
     }
     d += ' Z';
     return d;
-  }, [baseVertices, currentEdgePaths, useCurve]);
+  }, [baseVertices, currentEdgePaths, shapeType, transformType, useCurve]);
 
   // Precompute square demo tiles (delegated to Square.tsx)
   const squareDemoTiles = useMemo(() =>
@@ -824,6 +869,7 @@ export default function App() {
             onPointerMove={handleMouseMove}
             onPointerUp={handleMouseUp}
             onAddHexagonPoint={handleAddHexagonPoint}
+            onAddSquarePoint={handleAddSquarePoint}
           />
         )}
 

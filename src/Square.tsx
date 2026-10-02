@@ -202,6 +202,28 @@ export default SquareShape;
 
 export type Point = { x: number; y: number };
 
+export function mapSquareRotatedPoints(edgeIdx: number, points: Point[], baseVertices: Point[], triSymmetry: 'cw' | 'ccw') {
+  const mapping = triSymmetry === 'cw'
+    ? ({ 1: { paired: 0, pivotIdx: 1, angle: Math.PI / 2 }, 3: { paired: 2, pivotIdx: 3, angle: Math.PI / 2 } } as const)[edgeIdx as 1 | 3]
+    : ({ 1: { paired: 2, pivotIdx: 2, angle: -Math.PI / 2 }, 3: { paired: 0, pivotIdx: 0, angle: -Math.PI / 2 } } as const)[edgeIdx as 1 | 3];
+  if (!mapping) return null;
+
+  const pivot = baseVertices[mapping.pivotIdx];
+  const cosA = Math.cos(mapping.angle);
+  const sinA = Math.sin(mapping.angle);
+  return {
+    paired: mapping.paired,
+    points: points.map((point) => {
+      const dx = point.x - pivot.x;
+      const dy = point.y - pivot.y;
+      return {
+        x: pivot.x + cosA * dx - sinA * dy,
+        y: pivot.y + sinA * dx + cosA * dy,
+      };
+    }).reverse(),
+  };
+}
+
 export function applySquareEdit(newPaths: Record<number, Point[]>, activePoint: { edgeIdx: number; pointIdx: number } | null, baseVertices: Point[], triSymmetry: 'cw' | 'ccw', transformType: 'rotate90' | 'translate' | 'glide', CENTER: number) {
   if (!activePoint) return newPaths;
   // Edge indices (with startAngle -PI/4): 0=right,1=top,2=left,3=bottom
@@ -220,7 +242,10 @@ export function applySquareEdit(newPaths: Record<number, Point[]>, activePoint: 
   //   corresponding right/left edge midpoint
   if (activePoint.edgeIdx === 1) {
     const topIdx = 1;
-    if (transformType === 'translate') {
+    if (transformType === 'rotate90') {
+      const mapping = mapSquareRotatedPoints(topIdx, newPaths[topIdx], baseVertices, triSymmetry);
+      if (mapping) newPaths[mapping.paired] = mapping.points;
+    } else if (transformType === 'translate') {
       const tv0 = baseVertices[topIdx];
       const tv1 = baseVertices[(topIdx + 1) % 4];
       const tmx = (tv0.x + tv1.x) / 2;
@@ -329,7 +354,10 @@ export function applySquareEdit(newPaths: Record<number, Point[]>, activePoint: 
     const bmx = (bv0.x + bv1.x) / 2;
     const bmy = (bv0.y + bv1.y) / 2;
     const drivenPts = newPaths[driven];
-    if (drivenPts && drivenPts.length > 0) {
+    if (transformType === 'rotate90') {
+      const mapping = mapSquareRotatedPoints(driven, drivenPts, baseVertices, triSymmetry);
+      if (mapping) newPaths[mapping.paired] = mapping.points;
+    } else if (drivenPts && drivenPts.length > 0) {
       let cp = drivenPts[0];
       if (drivenPts.length >= 2) cp = { x: (drivenPts[0].x + drivenPts[1].x) / 2, y: (drivenPts[0].y + drivenPts[1].y) / 2 };
       const dvx = cp.x - bmx;
@@ -356,16 +384,38 @@ export function renderSquareControls(params: {
   triSymmetry: 'cw' | 'ccw';
   transformType: 'rotate90' | 'translate' | 'glide';
   handleMouseDown: (edgeIdx: number, pointIdx: number) => void;
+  baseVertices?: Point[];
+  onAddPoint?: (edgeIdx: number, clientX: number, clientY: number) => void;
 }) {
-  const { ei, points, displayPoints = points, activePoint, triSymmetry, transformType, handleMouseDown } = params;
+  const { ei, points, displayPoints = points, activePoint, triSymmetry, transformType, handleMouseDown, baseVertices, onAddPoint } = params;
   const driven = 3; // bottom edge
   const paired = triSymmetry === 'cw' ? (driven + 1) % 4 : (driven + 3) % 4;
   const leftIdx = 2;
   const topIdx = 1;
   const rightIdx = triSymmetry === 'cw' ? 0 : 2;
+  const interactiveEdges = transformType === 'rotate90' ? [topIdx, driven] : [topIdx, rightIdx];
+  const isInteractiveEdge = interactiveEdges.includes(ei);
 
   return (
     <g key={String(ei)}>
+      {transformType === 'rotate90' && isInteractiveEdge && baseVertices && onAddPoint && (
+        <line
+          x1={baseVertices[ei].x}
+          y1={baseVertices[ei].y}
+          x2={baseVertices[(ei + 1) % 4].x}
+          y2={baseVertices[(ei + 1) % 4].y}
+          stroke="#2563eb"
+          strokeWidth={8}
+          strokeOpacity={0.18}
+          strokeDasharray="6 4"
+          style={{ cursor: 'cell' }}
+          onContextMenu={(event: React.MouseEvent) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onAddPoint(ei, event.clientX, event.clientY);
+          }}
+        />
+      )}
       {points.map((p, pointIdx) => {
         const displayPoint = displayPoints[pointIdx] ?? p;
         const isDriven = ei === driven;
@@ -374,7 +424,7 @@ export function renderSquareControls(params: {
         let interactive = !isPaired && !(activePoint && activePoint.edgeIdx !== ei);
 
         if (transformType === 'translate' || transformType === 'glide') {
-          interactive = (ei === topIdx || ei === rightIdx) && !(activePoint && activePoint.edgeIdx !== ei);
+          interactive = isInteractiveEdge && !(activePoint && activePoint.edgeIdx !== ei);
         }
         if (transformType === 'rotate90' && ei === leftIdx) interactive = false;
 

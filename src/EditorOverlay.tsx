@@ -35,6 +35,7 @@ interface EditorOverlayProps {
   onPointerMove: (event: React.MouseEvent | React.TouchEvent) => void;
   onPointerUp: () => void;
   onAddHexagonPoint: (edgeIdx: number, clientX: number, clientY: number) => void;
+  onAddSquarePoint: (edgeIdx: number, clientX: number, clientY: number) => void;
 }
 
 const getCurveDisplayPoint = (
@@ -82,6 +83,7 @@ function EditorOverlay({
   onPointerMove,
   onPointerUp,
   onAddHexagonPoint,
+  onAddSquarePoint,
 }: EditorOverlayProps) {
   return (
     <div className={`z-10 flex flex-none items-center justify-center p-2.5 sm:p-8 lg:flex-1 lg:pointer-events-none ${isPageScrollLocked ? 'touch-none' : ''}`}>
@@ -146,6 +148,8 @@ function EditorOverlay({
                       triSymmetry: 'cw',
                       transformType: transformType as 'rotate90' | 'translate' | 'glide',
                       handleMouseDown: onPointerDown,
+                      baseVertices,
+                      onAddPoint: transformType === 'rotate90' ? onAddSquarePoint : undefined,
                     });
                   }
 
