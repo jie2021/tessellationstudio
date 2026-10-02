@@ -384,10 +384,11 @@ export function renderSquareControls(params: {
   triSymmetry: 'cw' | 'ccw';
   transformType: 'rotate90' | 'translate' | 'glide';
   handleMouseDown: (edgeIdx: number, pointIdx: number) => void;
+  useCurve?: boolean;
   baseVertices?: Point[];
   onAddPoint?: (edgeIdx: number, clientX: number, clientY: number) => void;
 }) {
-  const { ei, points, displayPoints = points, activePoint, triSymmetry, transformType, handleMouseDown, baseVertices, onAddPoint } = params;
+  const { ei, points, displayPoints = points, activePoint, triSymmetry, transformType, handleMouseDown, useCurve = false, baseVertices, onAddPoint } = params;
   const driven = 3; // bottom edge
   const paired = triSymmetry === 'cw' ? (driven + 1) % 4 : (driven + 3) % 4;
   const leftIdx = 2;
@@ -418,6 +419,7 @@ export function renderSquareControls(params: {
       )}
       {points.map((p, pointIdx) => {
         const displayPoint = displayPoints[pointIdx] ?? p;
+        const controlPoint = useCurve ? p : displayPoint;
         const isDriven = ei === driven;
         const isPaired = ei === paired;
         const isLeft = ei === leftIdx;
@@ -433,21 +435,34 @@ export function renderSquareControls(params: {
         else if (ei === leftIdx || ei === driven || isPaired) fill = '#f59e0b';
 
         return (
-          <motion.circle
-            key={pointIdx}
-            cx={displayPoint.x}
-            cy={displayPoint.y}
-            r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
-            initial={false}
-            animate={{ r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8, fill }}
-            className={`stroke-white stroke-[3px] shadow-lg ${
-              !interactive ? 'pointer-events-none cursor-default' :
-              activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none opacity-50 cursor-default' :
-              'cursor-move'
-            }`}
-            onMouseDown={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
-            onTouchStart={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
-          />
+          <g key={pointIdx}>
+            {useCurve && (
+              <line
+                x1={p.x}
+                y1={p.y}
+                x2={displayPoint.x}
+                y2={displayPoint.y}
+                stroke="#64748b"
+                strokeWidth={1}
+                strokeOpacity={0.65}
+                pointerEvents="none"
+              />
+            )}
+            <motion.circle
+              cx={controlPoint.x}
+              cy={controlPoint.y}
+              r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
+              initial={false}
+              animate={{ r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8, fill }}
+              className={`stroke-white stroke-[3px] shadow-lg ${
+                !interactive ? 'pointer-events-none cursor-default' :
+                activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none opacity-50 cursor-default' :
+                'cursor-move'
+              }`}
+              onMouseDown={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
+              onTouchStart={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
+            />
+          </g>
         );
       })}
     </g>

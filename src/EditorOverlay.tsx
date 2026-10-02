@@ -65,6 +65,27 @@ const getCurveDisplayPoint = (
   };
 };
 
+const getSquareCurveDisplayPoint = (start: Point, end: Point, controls: Point[], pointIdx: number): Point => {
+  if (controls.length === 0) return start;
+  if (controls.length === 1) return getCurveDisplayPoint(start, end, controls, 0, true);
+
+  const control = controls[pointIdx];
+  const previous = pointIdx === 0 ? start : {
+    x: (controls[pointIdx - 1].x + control.x) / 2,
+    y: (controls[pointIdx - 1].y + control.y) / 2,
+  };
+  const next = pointIdx === controls.length - 1 ? end : {
+    x: (control.x + controls[pointIdx + 1].x) / 2,
+    y: (control.y + controls[pointIdx + 1].y) / 2,
+  };
+  const t = 0.5;
+  const inverseT = 1 - t;
+  return {
+    x: inverseT * inverseT * previous.x + 2 * inverseT * t * control.x + t * t * next.x,
+    y: inverseT * inverseT * previous.y + 2 * inverseT * t * control.y + t * t * next.y,
+  };
+};
+
 function EditorOverlay({
   canvasSize,
   shapeType,
@@ -133,7 +154,12 @@ function EditorOverlay({
                   const edgeIndex = Number(edgeIdx);
                   const edgeStart = baseVertices[edgeIndex];
                   const edgeEnd = baseVertices[(edgeIndex + 1) % baseVertices.length];
-                  const displayPoints = points.map((_, pointIdx) => getCurveDisplayPoint(edgeStart, edgeEnd, points, pointIdx, useCurve));
+                  const displayPoints = points.map((_, pointIdx) => {
+                    if (shapeType === 'square' && transformType === 'rotate90' && useCurve) {
+                      return getSquareCurveDisplayPoint(edgeStart, edgeEnd, points, pointIdx);
+                    }
+                    return getCurveDisplayPoint(edgeStart, edgeEnd, points, pointIdx, useCurve);
+                  });
 
                   if (shapeType === 'triangle') {
                     return renderTriangleControls({ ei: edgeIndex, points, displayPoints, activePoint, triSymmetry: 'cw', handleMouseDown: onPointerDown });
@@ -148,6 +174,7 @@ function EditorOverlay({
                       triSymmetry: 'cw',
                       transformType: transformType as 'rotate90' | 'translate' | 'glide',
                       handleMouseDown: onPointerDown,
+                      useCurve,
                       baseVertices,
                       onAddPoint: transformType === 'rotate90' ? onAddSquarePoint : undefined,
                     });
