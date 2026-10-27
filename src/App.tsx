@@ -88,7 +88,7 @@ const getBaseVertices = (type: ShapeType): Point[] => {
 
 // --- Components ---
 
-const serializePatternSvg = (svgEl: SVGSVGElement) => {
+const serializePatternSvg = (svgEl: SVGSVGElement, originalVertices?: Point[]) => {
   const { width, height } = svgEl.getBoundingClientRect();
   const exportWidth = Math.round(width) || 1200;
   const exportHeight = Math.round(height) || 800;
@@ -107,6 +107,35 @@ const serializePatternSvg = (svgEl: SVGSVGElement) => {
   background.setAttribute('fill', backgroundColor === 'rgba(0, 0, 0, 0)' ? '#fafafa' : backgroundColor);
   clone.insertBefore(background, clone.firstChild);
 
+  if (originalVertices) {
+    const originalShape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    originalShape.setAttribute('id', 'tessellation-original-shape');
+    originalShape.setAttribute('points', originalVertices.map(({ x, y }) => `${x},${y}`).join(' '));
+    clone.querySelector('defs')!.appendChild(originalShape);
+
+    // Draw guides after the tiles so neighboring tile fills cannot cover them.
+    const guideLayers = new Map<Element, SVGGElement>();
+    clone.querySelectorAll<SVGUseElement>('use[href="#tessellation-tile"]').forEach((tile) => {
+      const parent = tile.parentElement!;
+      let layer = guideLayers.get(parent);
+      if (!layer) {
+        layer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        layer.setAttribute('data-export-original-shapes', 'true');
+        guideLayers.set(parent, layer);
+      }
+      const guide = tile.cloneNode(true) as SVGUseElement;
+      guide.removeAttribute('id');
+      guide.setAttribute('href', '#tessellation-original-shape');
+      guide.setAttribute('fill', 'none');
+      guide.removeAttribute('fill-opacity');
+      guide.setAttribute('stroke', '#171717');
+      guide.setAttribute('stroke-width', '1.5');
+      guide.setAttribute('stroke-linejoin', 'round');
+      layer.appendChild(guide);
+    });
+    guideLayers.forEach((layer, parent) => parent.appendChild(layer));
+  }
+
   return {
     svgText: new XMLSerializer().serializeToString(clone),
     width: exportWidth,
@@ -121,6 +150,7 @@ export default function App() {
   const [colorA, setColorA] = useState('#6366f1');
   const [colorB, setColorB] = useState('#ffffff');
   const [showGrid, setShowGrid] = useState(true);
+  const [includeOriginalShapesInPng, setIncludeOriginalShapesInPng] = useState(false);
   const [zoom, setZoom] = useState(1);
   // Triangle symmetry is fixed to clockwise by default
   const TRI_SYMMETRY: 'cw' = 'cw';
@@ -755,12 +785,30 @@ export default function App() {
           >
             <RotateCcw size={18} /> 설정 초기화
           </button>
+          <label className="flex items-start gap-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={includeOriginalShapesInPng}
+              onChange={(event) => setIncludeOriginalShapesInPng(event.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-indigo-600"
+              aria-describedby="png-original-shapes-description"
+            />
+            <span>
+              <span className="font-bold">PNG에 원래 도형 윤곽선 포함</span>
+              <span id="png-original-shapes-description" className="mt-1 block text-xs leading-relaxed text-neutral-500">
+                각 타일의 원래 사각형·삼각형·육각형을 실선으로 표시합니다. PNG 저장에만 적용됩니다.
+              </span>
+            </span>
+          </label>
           <button 
             className="flex items-center justify-center gap-2 w-full py-4 px-4 bg-indigo-600 text-white rounded-2xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 active:scale-[0.98]"
             onClick={() => {
               const svgEl = document.getElementById('tessellation-svg') as SVGSVGElement | null;
               if (!svgEl) return;
-              const { svgText, width, height } = serializePatternSvg(svgEl);
+              const { svgText, width, height } = serializePatternSvg(
+                svgEl,
+                includeOriginalShapesInPng ? baseVertices : undefined,
+              );
               const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
               const url    = URL.createObjectURL(blob);
 
