@@ -475,84 +475,49 @@ export default function App() {
     setActivePoint(null);
   }, [updateDraggedPoint]);
 
-  // Add a control point to a free-mode hexagon edge through its context-menu gesture.
-  // Inserts the new point sorted by its projection (t) along the edge,
-  // then rotates all interactive-edge points to update the paired edge.
-  const handleAddHexagonPoint = useCallback((edgeIdx: number, clientX: number, clientY: number) => {
-    const svg = document.getElementById('editor-svg');
-    if (!svg) return;
-    const rect = svg.getBoundingClientRect();
-    const x = (clientX - rect.left) * (CANVAS_SIZE / rect.width);
-    const y = (clientY - rect.top) * (CANVAS_SIZE / rect.height);
-
+  const handleAddPoint = useCallback((edgeIdx: number, pointIdx: number, side: 'left' | 'right') => {
     const bv = baseVerticesRef.current;
-    const v0 = bv[edgeIdx];
-    const v1 = bv[(edgeIdx + 1) % 6];
-    const ex = v1.x - v0.x, ey = v1.y - v0.y;
-    const len2 = ex * ex + ey * ey || 1;
-    const tNew = ((x - v0.x) * ex + (y - v0.y) * ey) / len2;
+    const currentPoints = currentEdgePathsRef.current[edgeIdx] || [];
+    const selected = currentPoints[pointIdx];
+    if (!selected) return;
 
-    setEdgePaths(() => {
-      const newPaths = { ...currentEdgePathsRef.current };
-
-      // Insert the new point at the correct sorted position along the edge
-      const curPoints = [...(newPaths[edgeIdx] || [])];
-      let insertIdx = curPoints.length;
-      for (let i = 0; i < curPoints.length; i++) {
-        const ti = ((curPoints[i].x - v0.x) * ex + (curPoints[i].y - v0.y) * ey) / len2;
-        if (tNew < ti) { insertIdx = i; break; }
-      }
-      curPoints.splice(insertIdx, 0, { x, y });
-      newPaths[edgeIdx] = curPoints;
-
-      // Rotate all interactive-edge points to paired edge
-      const freePairMap: Record<number, { paired: number; pivotIdx: number }> = {
-        0: { paired: 1, pivotIdx: 1 },
-        2: { paired: 3, pivotIdx: 3 },
-        4: { paired: 5, pivotIdx: 5 },
-      };
-      const mapping = freePairMap[edgeIdx];
-      if (mapping) {
-        const pivot = bv[mapping.pivotIdx];
-        const angle = -(2 * Math.PI) / 3;
-        const cosA = Math.cos(angle), sinA = Math.sin(angle);
-        newPaths[mapping.paired] = curPoints.map((pt: Point) => {
-          const dx = pt.x - pivot.x, dy = pt.y - pivot.y;
-          return { x: pivot.x + cosA * dx - sinA * dy, y: pivot.y + sinA * dx + cosA * dy };
-        }).reverse();
-      }
-      return newPaths;
-    });
-  }, []);
-
-  const handleAddSquarePoint = useCallback((edgeIdx: number, clientX: number, clientY: number) => {
-    const svg = document.getElementById('editor-svg');
-    if (!svg) return;
-    const rect = svg.getBoundingClientRect();
-    const x = (clientX - rect.left) * (CANVAS_SIZE / rect.width);
-    const y = (clientY - rect.top) * (CANVAS_SIZE / rect.height);
-
-    const bv = baseVerticesRef.current as SquarePoint[];
-    const v0 = bv[edgeIdx];
-    const v1 = bv[(edgeIdx + 1) % 4];
-    const ex = v1.x - v0.x;
-    const ey = v1.y - v0.y;
-    const len2 = ex * ex + ey * ey || 1;
-    const tNew = ((x - v0.x) * ex + (y - v0.y) * ey) / len2;
+    const start = bv[edgeIdx];
+    const end = bv[(edgeIdx + 1) % bv.length];
+    const neighbor = side === 'left'
+      ? (pointIdx > 0 ? currentPoints[pointIdx - 1] : start)
+      : (pointIdx < currentPoints.length - 1 ? currentPoints[pointIdx + 1] : end);
+    const newPoint = {
+      x: (selected.x + neighbor.x) / 2,
+      y: (selected.y + neighbor.y) / 2,
+    };
+    const insertIdx = side === 'left' ? pointIdx : pointIdx + 1;
 
     setEdgePaths(() => {
       const newPaths = { ...currentEdgePathsRef.current };
       const points = [...(newPaths[edgeIdx] || [])];
-      let insertIdx = points.length;
-      for (let i = 0; i < points.length; i++) {
-        const ti = ((points[i].x - v0.x) * ex + (points[i].y - v0.y) * ey) / len2;
-        if (tNew < ti) { insertIdx = i; break; }
-      }
-      points.splice(insertIdx, 0, { x, y });
+      points.splice(insertIdx, 0, newPoint);
       newPaths[edgeIdx] = points;
 
-      const mapping = mapSquareRotatedPoints(edgeIdx, points, bv, TRI_SYMMETRY);
-      if (mapping) newPaths[mapping.paired] = mapping.points;
+      if (shapeTypeRef.current === 'square') {
+        const mapping = mapSquareRotatedPoints(edgeIdx, points, bv as SquarePoint[], TRI_SYMMETRY);
+        if (mapping) newPaths[mapping.paired] = mapping.points;
+      } else {
+        const freePairMap: Record<number, { paired: number; pivotIdx: number }> = {
+          0: { paired: 1, pivotIdx: 1 },
+          2: { paired: 3, pivotIdx: 3 },
+          4: { paired: 5, pivotIdx: 5 },
+        };
+        const mapping = freePairMap[edgeIdx];
+        if (mapping) {
+          const pivot = bv[mapping.pivotIdx];
+          const angle = -(2 * Math.PI) / 3;
+          const cosA = Math.cos(angle), sinA = Math.sin(angle);
+          newPaths[mapping.paired] = points.map((pt: Point) => {
+            const dx = pt.x - pivot.x, dy = pt.y - pivot.y;
+            return { x: pivot.x + cosA * dx - sinA * dy, y: pivot.y + sinA * dx + cosA * dy };
+          }).reverse();
+        }
+      }
       return newPaths;
     });
   }, []);
@@ -952,8 +917,7 @@ export default function App() {
             onPointerDown={handleMouseDown}
             onPointerMove={handleMouseMove}
             onPointerUp={handleMouseUp}
-            onAddHexagonPoint={handleAddHexagonPoint}
-            onAddSquarePoint={handleAddSquarePoint}
+            onAddPoint={handleAddPoint}
           />
         )}
 

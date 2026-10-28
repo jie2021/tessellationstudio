@@ -229,9 +229,9 @@ export function renderHexagonControls(params: {
   transformType: 'rotate120' | 'translate' | 'glide' | 'free';
   handleMouseDown: (edgeIdx: number, pointIdx: number) => void;
   baseVertices?: Point[];
-  onAddPoint?: (edgeIdx: number, clientX: number, clientY: number) => void;
+  onPointContextMenu?: (edgeIdx: number, pointIdx: number, clientX: number, clientY: number, event?: React.SyntheticEvent) => void;
 }) {
-  const { ei, points, displayPoints = points, activePoint, transformType, handleMouseDown, baseVertices, onAddPoint } = params;
+  const { ei, points, displayPoints = points, activePoint, transformType, handleMouseDown, baseVertices, onPointContextMenu } = params;
   // Interactive control edges:
   // - rotate120: odd edges (1,3,5) are interactive; pairs are even edges (0,2,4)
   // - translate/glide: interactive edges are 1,3,5 and paired are opposite edges (i+3)%6
@@ -243,50 +243,8 @@ export function renderHexagonControls(params: {
                            transformType === 'free' ? [0,2,4] :
                            [1,3,5];
   const isInteractiveEdge = interactiveEdges.includes(ei);
-  let longPressTimer: number | null = null;
-
-  const cancelLongPress = () => {
-    if (longPressTimer !== null) {
-      window.clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
-  };
-
   return (
     <g key={String(ei)}>
-      {/* Wider hit area for adding a free-mode point via right-click or long-press. */}
-      {transformType === 'free' && isInteractiveEdge && baseVertices && onAddPoint && (
-        <line
-          x1={baseVertices[ei].x}
-          y1={baseVertices[ei].y}
-          x2={baseVertices[(ei + 1) % 6].x}
-          y2={baseVertices[(ei + 1) % 6].y}
-          stroke="#2563eb"
-          strokeWidth={8}
-          strokeOpacity={0.18}
-          strokeDasharray="6 4"
-          style={{ cursor: 'cell' }}
-          onTouchStart={(event: React.TouchEvent) => {
-            event.preventDefault();
-            const touch = event.touches[0];
-            if (!touch) return;
-            cancelLongPress();
-            longPressTimer = window.setTimeout(() => {
-              longPressTimer = null;
-              onAddPoint(ei, touch.clientX, touch.clientY);
-            }, 500);
-          }}
-          onTouchMove={cancelLongPress}
-          onTouchEnd={cancelLongPress}
-          onTouchCancel={cancelLongPress}
-          onContextMenu={(e: React.MouseEvent) => {
-            cancelLongPress();
-            e.preventDefault();
-            e.stopPropagation();
-            onAddPoint(ei, e.clientX, e.clientY);
-          }}
-        />
-      )}
       {points.map((p, pointIdx) => {
         const displayPoint = displayPoints[pointIdx] ?? p;
         // determine pairedness
@@ -325,7 +283,19 @@ export function renderHexagonControls(params: {
               'cursor-move'
             }`}
             onMouseDown={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
-            onTouchStart={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
+            onContextMenu={!interactive || !onPointContextMenu ? undefined : (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const pointerType = (event.nativeEvent as MouseEvent & { pointerType?: string }).pointerType;
+              if (pointerType === 'touch') return;
+              onPointContextMenu(ei, pointIdx, event.clientX, event.clientY, event);
+            }}
+            onTouchStart={!interactive ? undefined : () => {
+              handleMouseDown(ei, pointIdx);
+            }}
+            onDoubleClick={!interactive || !onPointContextMenu ? undefined : (event) => {
+              onPointContextMenu(ei, pointIdx, event.clientX, event.clientY, event);
+            }}
           />
         );
       })}

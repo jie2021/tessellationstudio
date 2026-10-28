@@ -386,9 +386,9 @@ export function renderSquareControls(params: {
   handleMouseDown: (edgeIdx: number, pointIdx: number) => void;
   useCurve?: boolean;
   baseVertices?: Point[];
-  onAddPoint?: (edgeIdx: number, clientX: number, clientY: number) => void;
+  onPointContextMenu?: (edgeIdx: number, pointIdx: number, clientX: number, clientY: number, event?: React.SyntheticEvent) => void;
 }) {
-  const { ei, points, displayPoints = points, activePoint, triSymmetry, transformType, handleMouseDown, useCurve = false, baseVertices, onAddPoint } = params;
+  const { ei, points, displayPoints = points, activePoint, triSymmetry, transformType, handleMouseDown, useCurve = false, baseVertices, onPointContextMenu } = params;
   const driven = 3; // bottom edge
   const paired = triSymmetry === 'cw' ? (driven + 1) % 4 : (driven + 3) % 4;
   const leftIdx = 2;
@@ -396,49 +396,8 @@ export function renderSquareControls(params: {
   const rightIdx = triSymmetry === 'cw' ? 0 : 2;
   const interactiveEdges = transformType === 'rotate90' ? [topIdx, driven] : [topIdx, rightIdx];
   const isInteractiveEdge = interactiveEdges.includes(ei);
-  let longPressTimer: number | null = null;
-
-  const cancelLongPress = () => {
-    if (longPressTimer !== null) {
-      window.clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
-  };
-
   return (
     <g key={String(ei)}>
-      {transformType === 'rotate90' && isInteractiveEdge && baseVertices && onAddPoint && (
-        <line
-          x1={baseVertices[ei].x}
-          y1={baseVertices[ei].y}
-          x2={baseVertices[(ei + 1) % 4].x}
-          y2={baseVertices[(ei + 1) % 4].y}
-          stroke="#2563eb"
-          strokeWidth={8}
-          strokeOpacity={0.18}
-          strokeDasharray="6 4"
-          style={{ cursor: 'cell' }}
-          onTouchStart={(event: React.TouchEvent) => {
-            event.preventDefault();
-            const touch = event.touches[0];
-            if (!touch) return;
-            cancelLongPress();
-            longPressTimer = window.setTimeout(() => {
-              longPressTimer = null;
-              onAddPoint(ei, touch.clientX, touch.clientY);
-            }, 500);
-          }}
-          onTouchMove={cancelLongPress}
-          onTouchEnd={cancelLongPress}
-          onTouchCancel={cancelLongPress}
-          onContextMenu={(event: React.MouseEvent) => {
-            cancelLongPress();
-            event.preventDefault();
-            event.stopPropagation();
-            onAddPoint(ei, event.clientX, event.clientY);
-          }}
-        />
-      )}
       {points.map((p, pointIdx) => {
         const displayPoint = displayPoints[pointIdx] ?? p;
         const controlPoint = useCurve ? p : displayPoint;
@@ -482,7 +441,19 @@ export function renderSquareControls(params: {
                 'cursor-move'
               }`}
               onMouseDown={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
-              onTouchStart={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
+              onContextMenu={!interactive || !onPointContextMenu ? undefined : (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const pointerType = (event.nativeEvent as MouseEvent & { pointerType?: string }).pointerType;
+                if (pointerType === 'touch') return;
+                onPointContextMenu(ei, pointIdx, event.clientX, event.clientY, event);
+              }}
+              onTouchStart={!interactive ? undefined : () => {
+                handleMouseDown(ei, pointIdx);
+              }}
+              onDoubleClick={!interactive || !onPointContextMenu ? undefined : (event) => {
+                onPointContextMenu(ei, pointIdx, event.clientX, event.clientY, event);
+              }}
             />
           </g>
         );

@@ -34,8 +34,7 @@ interface EditorOverlayProps {
   onPointerDown: (edgeIdx: number, pointIdx: number) => void;
   onPointerMove: (event: React.MouseEvent | React.TouchEvent) => void;
   onPointerUp: () => void;
-  onAddHexagonPoint: (edgeIdx: number, clientX: number, clientY: number) => void;
-  onAddSquarePoint: (edgeIdx: number, clientX: number, clientY: number) => void;
+  onAddPoint: (edgeIdx: number, pointIdx: number, side: 'left' | 'right') => void;
 }
 
 const getCurveDisplayPoint = (
@@ -103,11 +102,25 @@ function EditorOverlay({
   onPointerDown,
   onPointerMove,
   onPointerUp,
-  onAddHexagonPoint,
-  onAddSquarePoint,
+  onAddPoint,
 }: EditorOverlayProps) {
+  const [pointMenu, setPointMenu] = React.useState<{ edgeIdx: number; pointIdx: number; x: number; y: number } | null>(null);
+
+  const handlePointContextMenu = (edgeIdx: number, pointIdx: number, clientX: number, clientY: number, event?: React.SyntheticEvent) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    onPointerDown(edgeIdx, pointIdx);
+    setPointMenu({ edgeIdx, pointIdx, x: clientX, y: clientY });
+  };
+
+  const addPoint = (side: 'left' | 'right') => {
+    if (!pointMenu) return;
+    onAddPoint(pointMenu.edgeIdx, pointMenu.pointIdx, side);
+    setPointMenu(null);
+  };
+
   return (
-    <div className={`z-10 flex flex-none items-center justify-center p-2.5 sm:p-8 lg:flex-1 lg:pointer-events-none ${isPageScrollLocked ? 'touch-none' : ''}`}>
+    <div className={`relative z-10 flex flex-none items-center justify-center p-2.5 sm:p-8 lg:flex-1 lg:pointer-events-none ${isPageScrollLocked ? 'touch-none' : ''}`}>
       <div className="pointer-events-auto relative w-[calc(100vw-20px)] max-w-[464px] sm:w-auto">
         <AnimatePresence mode="wait">
           {showEditor && (
@@ -135,7 +148,10 @@ function EditorOverlay({
                 onMouseLeave={onPointerUp}
                 onTouchMove={onPointerMove}
                 onTouchEnd={onPointerUp}
-                onContextMenu={(event) => event.preventDefault()}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setPointMenu(null);
+                }}
               >
                 {showGrid && (
                   <g className="stroke-neutral-200 stroke-1">
@@ -182,7 +198,7 @@ function EditorOverlay({
                       handleMouseDown: onPointerDown,
                       useCurve,
                       baseVertices,
-                      onAddPoint: transformType === 'rotate90' ? onAddSquarePoint : undefined,
+                      onPointContextMenu: transformType === 'rotate90' ? handlePointContextMenu : undefined,
                     });
                   }
 
@@ -194,7 +210,7 @@ function EditorOverlay({
                     transformType: transformType as 'rotate120' | 'translate' | 'glide' | 'free',
                     handleMouseDown: onPointerDown,
                     baseVertices,
-                    onAddPoint: transformType === 'free' ? onAddHexagonPoint : undefined,
+                    onPointContextMenu: transformType === 'free' ? handlePointContextMenu : undefined,
                   });
                 })}
 
@@ -213,6 +229,43 @@ function EditorOverlay({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {pointMenu && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onMouseDown={() => setPointMenu(null)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setPointMenu(null);
+              }}
+            />
+            <div
+              role="menu"
+              aria-label="점 추가"
+              className="fixed z-50 min-w-44 overflow-hidden rounded-xl border border-neutral-200 bg-white p-1.5 shadow-2xl"
+              style={{ left: pointMenu.x, top: pointMenu.y }}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-neutral-700 hover:bg-indigo-50 hover:text-indigo-700"
+                onClick={() => addPoint('left')}
+              >
+                왼쪽에 점 추가
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-neutral-700 hover:bg-indigo-50 hover:text-indigo-700"
+                onClick={() => addPoint('right')}
+              >
+                오른쪽에 점 추가
+              </button>
+            </div>
+          </>
+        )}
 
         <button
           type="button"
