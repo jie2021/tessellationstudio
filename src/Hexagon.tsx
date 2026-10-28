@@ -230,8 +230,9 @@ export function renderHexagonControls(params: {
   handleMouseDown: (edgeIdx: number, pointIdx: number) => void;
   baseVertices?: Point[];
   onPointContextMenu?: (edgeIdx: number, pointIdx: number, clientX: number, clientY: number, event?: React.SyntheticEvent) => void;
+  useCurve?: boolean;
 }) {
-  const { ei, points, displayPoints = points, activePoint, transformType, handleMouseDown, baseVertices, onPointContextMenu } = params;
+  const { ei, points, displayPoints = points, activePoint, transformType, handleMouseDown, baseVertices, onPointContextMenu, useCurve = false } = params;
   // Interactive control edges:
   // - rotate120: odd edges (1,3,5) are interactive; pairs are even edges (0,2,4)
   // - translate/glide: interactive edges are 1,3,5 and paired are opposite edges (i+3)%6
@@ -247,6 +248,7 @@ export function renderHexagonControls(params: {
     <g key={String(ei)}>
       {points.map((p, pointIdx) => {
         const displayPoint = displayPoints[pointIdx] ?? p;
+        const controlPoint = useCurve ? p : displayPoint;
         // determine pairedness
         // - In `rotate120` mode the even edges are considered paired/non-interactive
         //   (they mirror the odd interactive edges via rotation rules).
@@ -270,33 +272,46 @@ export function renderHexagonControls(params: {
         else if (isPaired) fill = '#f59e0b';
 
         return (
-          <motion.circle
-            key={pointIdx}
-            cx={displayPoint.x}
-            cy={displayPoint.y}
-            r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
-            initial={false}
-            animate={{ r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8, fill }}
-            className={`stroke-white stroke-[3px] shadow-lg ${
-              !interactive ? 'pointer-events-none cursor-default' :
-              activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none opacity-50 cursor-default' :
-              'cursor-move'
-            }`}
-            onMouseDown={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
-            onContextMenu={!interactive || !onPointContextMenu ? undefined : (event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              const pointerType = (event.nativeEvent as MouseEvent & { pointerType?: string }).pointerType;
-              if (pointerType === 'touch') return;
-              onPointContextMenu(ei, pointIdx, event.clientX, event.clientY, event);
-            }}
-            onTouchStart={!interactive ? undefined : () => {
-              handleMouseDown(ei, pointIdx);
-            }}
-            onDoubleClick={!interactive || !onPointContextMenu ? undefined : (event) => {
-              onPointContextMenu(ei, pointIdx, event.clientX, event.clientY, event);
-            }}
-          />
+          <g key={pointIdx}>
+            {useCurve && (
+              <line
+                x1={p.x}
+                y1={p.y}
+                x2={displayPoint.x}
+                y2={displayPoint.y}
+                stroke="#64748b"
+                strokeWidth={1}
+                strokeOpacity={0.65}
+                pointerEvents="none"
+              />
+            )}
+            <motion.circle
+              cx={controlPoint.x}
+              cy={controlPoint.y}
+              r={activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8}
+              initial={false}
+              animate={{ r: activePoint?.edgeIdx === ei && activePoint?.pointIdx === pointIdx ? 12 : 8, fill }}
+              className={`stroke-white stroke-[3px] shadow-lg ${
+                !interactive ? 'pointer-events-none cursor-default' :
+                activePoint && activePoint.edgeIdx !== ei ? 'pointer-events-none opacity-50 cursor-default' :
+                'cursor-move'
+              }`}
+              onMouseDown={!interactive ? undefined : () => handleMouseDown(ei, pointIdx)}
+              onContextMenu={!interactive || !onPointContextMenu ? undefined : (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const pointerType = (event.nativeEvent as MouseEvent & { pointerType?: string }).pointerType;
+                if (pointerType === 'touch') return;
+                onPointContextMenu(ei, pointIdx, event.clientX, event.clientY, event);
+              }}
+              onTouchStart={!interactive ? undefined : () => {
+                handleMouseDown(ei, pointIdx);
+              }}
+              onDoubleClick={!interactive || !onPointContextMenu ? undefined : (event) => {
+                onPointContextMenu(ei, pointIdx, event.clientX, event.clientY, event);
+              }}
+            />
+          </g>
         );
       })}
     </g>

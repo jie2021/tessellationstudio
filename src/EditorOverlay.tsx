@@ -177,7 +177,11 @@ function EditorOverlay({
                   const edgeStart = baseVertices[edgeIndex];
                   const edgeEnd = baseVertices[(edgeIndex + 1) % baseVertices.length];
                   const displayPoints = points.map((_, pointIdx) => {
-                    if (shapeType === 'square' && transformType === 'rotate90' && useCurve) {
+                    if (
+                      ((shapeType === 'square' && transformType === 'rotate90') ||
+                        (shapeType === 'hexagon' && transformType === 'free')) &&
+                      useCurve
+                    ) {
                       return getSquareCurveDisplayPoint(edgeStart, edgeEnd, points, pointIdx);
                     }
                     return getCurveDisplayPoint(edgeStart, edgeEnd, points, pointIdx, useCurve);
@@ -211,6 +215,7 @@ function EditorOverlay({
                     handleMouseDown: onPointerDown,
                     baseVertices,
                     onPointContextMenu: transformType === 'free' ? handlePointContextMenu : undefined,
+                    useCurve,
                   });
                 })}
 

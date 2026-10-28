@@ -544,7 +544,11 @@ export default function App() {
         if (points.length === 1) {
           // Quadratic Bezier: one control point
           d += ` Q ${points[0].x} ${points[0].y} ${v2.x} ${v2.y}`;
-        } else if (shapeType === 'square' && transformType === 'rotate90' && points.length >= 2) {
+        } else if (
+          ((shapeType === 'square' && transformType === 'rotate90') ||
+            (shapeType === 'hexagon' && transformType === 'free')) &&
+          points.length >= 2
+        ) {
           const midpoint = (a: Point, b: Point) => ({
             x: (a.x + b.x) / 2,
             y: (a.y + b.y) / 2,
