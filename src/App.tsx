@@ -9,6 +9,9 @@
 // shape modules; this file owns shared SVG path generation and UI coordination.
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Capacitor } from '@capacitor/core';
+import { Directory, Filesystem } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { 
   Square, 
   Hexagon, 
@@ -143,6 +146,15 @@ const serializePatternSvg = (svgEl: SVGSVGElement, originalVertices?: Point[]) =
   };
 };
 
+const bytesToBase64 = (bytes: Uint8Array): string => {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+};
+
 export default function App() {
   const [shapeType, setShapeType] = useState<ShapeType>('square');
   const [edgePaths, setEdgePaths] = useState<Record<number, Point[]>>({});
@@ -172,6 +184,42 @@ export default function App() {
 
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [viewportSize, setViewportSize] = useState({ w: 1920, h: 1080 });
+
+  const saveExportFile = useCallback(async (filename: string, blob: Blob) => {
+    if (!Capacitor.isNativePlatform()) {
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      return;
+    }
+
+    try {
+      const data = bytesToBase64(new Uint8Array(await blob.arrayBuffer()));
+      const { uri } = await Filesystem.writeFile({
+        path: filename,
+        data,
+        directory: Directory.Documents,
+        recursive: true,
+      });
+
+      // The file is already saved even if the user dismisses the share sheet.
+      try {
+        await Share.share({
+          title: filename,
+          url: uri,
+          dialogTitle: '저장된 파일 열기 또는 공유',
+        });
+      } catch (shareError) {
+        console.info('File was saved, but the share sheet was dismissed.', shareError);
+      }
+    } catch (error) {
+      console.error('Failed to save exported file.', error);
+      window.alert('파일 저장에 실패했습니다. 저장 공간과 앱 권한을 확인해주세요.');
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -824,12 +872,7 @@ export default function App() {
 
                 canvas.toBlob((pngBlob) => {
                   if (!pngBlob) return;
-                  const pngUrl = URL.createObjectURL(pngBlob);
-                  const a = document.createElement('a');
-                  a.download = `tessellation-${shapeType}.png`;
-                  a.href = pngUrl;
-                  a.click();
-                  window.setTimeout(() => URL.revokeObjectURL(pngUrl), 0);
+                  void saveExportFile(`tessellation-${shapeType}.png`, pngBlob);
                 }, 'image/png');
               };
               img.src = url;
@@ -843,13 +886,7 @@ export default function App() {
               if (!svgEl) return;
               const { svgText } = serializePatternSvg(svgEl);
               const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
-              const url    = URL.createObjectURL(blob);
-
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `tessellation-${shapeType}.svg`;
-              a.click();
-              window.setTimeout(() => URL.revokeObjectURL(url), 0);
+              void saveExportFile(`tessellation-${shapeType}.svg`, blob);
             }}
             className="flex items-center justify-center gap-2 w-full py-3 px-4 bg-white text-neutral-700 rounded-2xl font-bold text-sm hover:bg-neutral-100 transition-all border border-neutral-100"
           >

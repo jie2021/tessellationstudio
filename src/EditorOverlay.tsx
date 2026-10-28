@@ -124,6 +124,12 @@ function EditorOverlay({
                 width={canvasSize}
                 height={canvasSize}
                 className="h-auto w-full cursor-crosshair overflow-visible"
+                style={{
+                  touchAction: 'none',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  WebkitTouchCallout: 'none',
+                }}
                 onMouseMove={onPointerMove}
                 onMouseUp={onPointerUp}
                 onMouseLeave={onPointerUp}

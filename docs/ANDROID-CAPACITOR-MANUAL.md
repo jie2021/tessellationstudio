@@ -149,7 +149,7 @@ npm run build:web
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.tessellationstudio.app',
+  appId: 'com.jie.tessellationstudio',
   appName: 'Tessellation Studio',
   webDir: 'out',
 };

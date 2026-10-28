@@ -11,6 +11,7 @@
 
 - [Windows Electron app manual](docs/WINDOWS-ELECTRON-MANUAL.md)
 - [Android Capacitor app manual](docs/ANDROID-CAPACITOR-MANUAL.md)
+- [Google Play 포팅 및 AAB 빌드 절차](docs/GOOGLE-PLAY-PORTING-PROCESS.md)
 
 ## Prerequisites
 - Node.js 18+ (recommended)

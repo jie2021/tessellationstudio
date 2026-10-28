@@ -243,6 +243,14 @@ export function renderHexagonControls(params: {
                            transformType === 'free' ? [0,2,4] :
                            [1,3,5];
   const isInteractiveEdge = interactiveEdges.includes(ei);
+  let longPressTimer: number | null = null;
+
+  const cancelLongPress = () => {
+    if (longPressTimer !== null) {
+      window.clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  };
 
   return (
     <g key={String(ei)}>
@@ -258,7 +266,21 @@ export function renderHexagonControls(params: {
           strokeOpacity={0.18}
           strokeDasharray="6 4"
           style={{ cursor: 'cell' }}
+          onTouchStart={(event: React.TouchEvent) => {
+            event.preventDefault();
+            const touch = event.touches[0];
+            if (!touch) return;
+            cancelLongPress();
+            longPressTimer = window.setTimeout(() => {
+              longPressTimer = null;
+              onAddPoint(ei, touch.clientX, touch.clientY);
+            }, 500);
+          }}
+          onTouchMove={cancelLongPress}
+          onTouchEnd={cancelLongPress}
+          onTouchCancel={cancelLongPress}
           onContextMenu={(e: React.MouseEvent) => {
+            cancelLongPress();
             e.preventDefault();
             e.stopPropagation();
             onAddPoint(ei, e.clientX, e.clientY);
@@ -801,4 +823,3 @@ export function hexagonAutoAdvance(demoMode: boolean, demoStep: number, demoCent
     }
   }
 }
-

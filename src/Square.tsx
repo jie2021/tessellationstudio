@@ -396,6 +396,14 @@ export function renderSquareControls(params: {
   const rightIdx = triSymmetry === 'cw' ? 0 : 2;
   const interactiveEdges = transformType === 'rotate90' ? [topIdx, driven] : [topIdx, rightIdx];
   const isInteractiveEdge = interactiveEdges.includes(ei);
+  let longPressTimer: number | null = null;
+
+  const cancelLongPress = () => {
+    if (longPressTimer !== null) {
+      window.clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  };
 
   return (
     <g key={String(ei)}>
@@ -410,7 +418,21 @@ export function renderSquareControls(params: {
           strokeOpacity={0.18}
           strokeDasharray="6 4"
           style={{ cursor: 'cell' }}
+          onTouchStart={(event: React.TouchEvent) => {
+            event.preventDefault();
+            const touch = event.touches[0];
+            if (!touch) return;
+            cancelLongPress();
+            longPressTimer = window.setTimeout(() => {
+              longPressTimer = null;
+              onAddPoint(ei, touch.clientX, touch.clientY);
+            }, 500);
+          }}
+          onTouchMove={cancelLongPress}
+          onTouchEnd={cancelLongPress}
+          onTouchCancel={cancelLongPress}
           onContextMenu={(event: React.MouseEvent) => {
+            cancelLongPress();
             event.preventDefault();
             event.stopPropagation();
             onAddPoint(ei, event.clientX, event.clientY);
