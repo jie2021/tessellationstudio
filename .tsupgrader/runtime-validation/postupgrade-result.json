@@ -1,0 +1,172 @@
+{
+  "planHash": "3dd6bebeaa825ccfc8010c781e6c12622969138918b4bee3b2d8c85d68ef07b9",
+  "phase": "postupgrade",
+  "recordedAtUtc": "2026-10-28T02:31:07.8139814Z",
+  "retryCount": 0,
+  "resetBaseline": false,
+  "complete": true,
+  "result": {
+    "setupSucceeded": true,
+    "setupDurationMs": 41462,
+    "setupFailureOutput": null,
+    "assertions": [
+      {
+        "name": "tsc-no-emit",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "",
+        "durationMs": 3106
+      },
+      {
+        "name": "next-static-build",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E tessellation-studio@1.0.0 build:web\r\n\u003E next build\r\n\r\n\u25B2 Next.js 16.4.3 (Turbopack)\r\n\u2713 Running next.config.mjs took 25ms\r\n\r\n  Running TypeScript ...\r\n  Finished TypeScript in 2.2s ...\r\n  Creating an optimized production build ...\r\n\u2713 Compiled successfully in 1475ms\r\n  Collecting page data using 5 workers ...\r\n  Generating static pages using 5 workers (0/3) ...\r\n\u2713 Generating static pages using 5 workers (3/3) in 1498ms\r\n  Finalizing page optimization ...\r\n  Exporting using 19 workers (0/3) ...\r\n\u2713 Exporting using 19 workers (3/3) in 835ms\r\n\r\nRoute (pages)\r\n\u250C \u25CB / (870 ms)\r\n\u251C   /_app\r\n\u2514 \u25CB /404\r\n\r\n\u25CB  (Static)  prerendered as static content\r\n\r\n",
+        "durationMs": 9203
+      },
+      {
+        "name": "dev-server-serves-home",
+        "kind": "http-probe",
+        "verificationMethod": "http-status",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": null,
+        "outputSample": "HTTP 200\n\u003C!DOCTYPE html\u003E\u003Chtml\u003E\u003Chead\u003E\u003Cmeta charSet=\u0022utf-8\u0022 data-next-head=\u0022\u0022/\u003E\u003Cmeta name=\u0022viewport\u0022 content=\u0022width=device-width\u0022 data-next-head=\u0022\u0022/\u003E\u003Clink rel=\u0022icon\u0022 href=\u0022/favicon.ico\u0022 data-next-head=\u0022\u0022/\u003E\u003Clink data-next-font=\u0022\u0022 rel=\u0022preconnect\u0022 href=\u0022/\u0022 crossorigin=\u0022anonymous\u0022/\u003E\u003Clink rel=\u0022preload\u0022 href=\u0022/_next/static/chunks/_1wft-4g1qh3dm._.css\u0022 as=\u0022style\u0022/\u003E\u003Cstyle data-next-hide-fouc=\u0022true\u0022\u003Ebody{display:none}\u003C/style\u003E\u003Cnoscript data-next-hide-fouc=\u0022true\u0022\u003E\u003Cstyle\u003Ebody{display:block}\u003C/style\u003E\u003C/noscript\u003E\u003Clink rel=\u0022stylesheet\u0022 href=\u0022/_next/static/chunks/_1wft-4g1qh3dm._.css\u0022 data-n-g=\u0022\u0022/\u003E\u003Cnoscript data-n-css=\u0022\u0022\u003E\u003C/noscript\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_next_dist_compiled_14ibvnakj0v0q._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_next_dist_shared_lib_1vsvqbgbyql3b._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_next_dist_client_16lnmlosr3ca7._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_next_dist_0zk-zb1fqxtk9._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_next_head_0wi9zurbt3sl4.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_react-dom_cjs_react-dom-client_development_1nq9a-7w2rk6e.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_react-dom_cjs_react-dom_development_0d3scg3xnfy6h.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_react-dom_13voigl36lis-._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_1z0m79vly6l7k._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/%5Broot-of-the-server%5D__0z0jv69syui9f._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/pages__app_0du2_q-cjzmdk._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/turbopack-pages__app_0x_d-9qsxuc6w._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_%40capacitor_1_2sp6g0m0s4m._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/%5Broot-of-the-server%5D__02rmbw9vm0zop._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/node_modules_0c41vxvlru2l3._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/pages_index_0-zonuzt0n7az._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/chunks/turbopack-pages_index_1b1eex16-78n7._.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/development/_buildManifest.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/development/_ssgManifest.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cscript src=\u0022/_next/static/development/_clientMiddlewareManifest.js\u0022 defer=\u0022\u0022\u003E\u003C/script\u003E\u003Cnoscript id=\u0022__next_css__DO_NOT_USE__\u0022\u003E\u003C/noscript\u003E\u003C/head\u003E\u003Cbody\u003E\u003Cdiv id=\u0022__next\u0022\u003E\u003Cdiv class=\u0022min-h-screen flex flex-col lg:flex-row bg-neutral-50 lg:overflow-hidden font-sans \u0022\u003E\u003Caside class=\u0022fixed inset-y-0 left-0 z-50 w-[min(88vw,24rem)] bg-white border-r border-neutral-200 p-6 sm:p-8 flex flex-col gap-8 shadow-xl overflow-y-auto transition-transform duration-300 ease-out lg:relative lg:inset-auto lg:z-20 lg:w-96 lg:translate-x-0 lg:border-r lg:p-8 -translate-x-full\u0022\u003E\u003Cheader class=\u0022flex items-start justify-between gap-4\u0022\u003E\u003Cdiv\u003E\u003Ch1 class=\u0022text-3xl font-display font-bold tracking-tight text-neutral-900 leading-none\u0022\u003ETessellation \u003Cspan class=\u0022text-indigo-600\u0022\u003EStudio\u003C/span\u003E\u003C/h1\u003E\u003Cp class=\u0022text-sm text-neutral-500 mt-3 leading-relaxed\u0022\u003E\uB3C4\uD615\uC758 \uBCC0\uC744 \uC790\uC720\uB86D\uAC8C \uBCC0\uD615\uD558\uC5EC \uC544\uB984\uB2E4\uC6B4 \uBC18\uBCF5 \uD328\uD134\uC744 \uB9CC\uB4E4\uC5B4\uBCF4\uC138\uC694.\u003C/p\u003E\u003C/div\u003E\u003Cbutton type=\u0022button\u0022 aria-label=\u0022\uBA54\uB274 \uB2EB\uAE30\u0022 class=\u0022shrink-0 rounded-xl p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 lg:hidden\u0022\u003E\u003Csvg xmlns=\u0022http://www.w3.org/2000/svg\u0022 width=\u002222\u0022 height=\u002222\u0022 viewBox=\u00220 0 24 24\u0022 fill=\u0022none\u0022 stroke=\u0022currentColor\u0022 stroke-width=\u00222\u0022 stroke-linecap=\u0022round\u0022 stroke-linejoin=\u0022round\u0022 class=\u0022lucide lucide-x\u0022 aria-hidden=\u0022true\u0022\u003E\u003Cpath d=\u0022M18 6 6 18\u0022\u003E\u003C/path\u003E\u003Cpath d=\u0022m6 6 12 12\u0022\u003E\u003C/path\u003E\u003C/svg\u003E\u003C/button\u003E\u003C/header\u003E\u003Cdiv class=\u0022space-y-8\u0022\u003E\u003Csection class=\u0022space-y-4\u0022\u003E\u003Clabel class=\u0022text-[11px] font-bold uppercase tracking-widest text-neutral-400 flex items-center gap-2\u0022\u003E\u003Csvg xmlns=\u0022http://www.w3.org/2000/svg\u0022 width=\u002214\u0022 height=\u002214\u0022 viewBox=\u00220 0 24 24\u0022 fill=\u0022none\u0022 stroke=\u0022currentColor\u0022 stroke-width=\u00222\u0022 stroke-linecap=\u0022round\u0022 stroke-linejoin=\u0022round\u0022 class=\u0022luci\n\u2026[truncated]",
+        "durationMs": 80
+      }
+    ],
+    "executions": [
+      {
+        "source": "setup[0]",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+        "args": [
+          "ci"
+        ],
+        "cwd": "C:\\dev\\tessel\\tessellationstudio",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32",
+        "nodeExecutable": "C:\\Program Files\\nodejs\\node.EXE",
+        "nodeVersion": "v22.18.0",
+        "packageManager": "npm",
+        "packageManagerExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+        "packageManagerVersion": "10.9.3",
+        "cleanup": {
+          "RootProcessId": 35720,
+          "Completed": true,
+          "ProcessesObserved": 7,
+          "ProcessesTerminated": 1,
+          "Failure": null
+        }
+      },
+      {
+        "source": "devServer",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+        "args": [
+          "run",
+          "dev"
+        ],
+        "cwd": "C:\\dev\\tessel\\tessellationstudio",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32",
+        "nodeExecutable": "C:\\Program Files\\nodejs\\node.EXE",
+        "nodeVersion": "v22.18.0",
+        "packageManager": "npm",
+        "packageManagerExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+        "packageManagerVersion": "10.9.3",
+        "cleanup": {
+          "RootProcessId": 37356,
+          "Completed": true,
+          "ProcessesObserved": 16,
+          "ProcessesTerminated": 7,
+          "Failure": null
+        }
+      },
+      {
+        "source": "tsc-no-emit",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npx.CMD",
+        "args": [
+          "tsc",
+          "--noEmit"
+        ],
+        "cwd": "C:\\dev\\tessel\\tessellationstudio",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32",
+        "nodeExecutable": null,
+        "nodeVersion": null,
+        "packageManager": null,
+        "packageManagerExecutable": null,
+        "packageManagerVersion": null,
+        "cleanup": {
+          "RootProcessId": 24896,
+          "Completed": true,
+          "ProcessesObserved": 7,
+          "ProcessesTerminated": 1,
+          "Failure": null
+        }
+      },
+      {
+        "source": "next-static-build",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+        "args": [
+          "run",
+          "build:web"
+        ],
+        "cwd": "C:\\dev\\tessel\\tessellationstudio",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32",
+        "nodeExecutable": "C:\\Program Files\\nodejs\\node.EXE",
+        "nodeVersion": "v22.18.0",
+        "packageManager": "npm",
+        "packageManagerExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+        "packageManagerVersion": "10.9.3",
+        "cleanup": {
+          "RootProcessId": 36184,
+          "Completed": true,
+          "ProcessesObserved": 42,
+          "ProcessesTerminated": 1,
+          "Failure": null
+        }
+      },
+      {
+        "source": "dev-server-serves-home",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+        "args": [
+          "run",
+          "dev"
+        ],
+        "cwd": "C:\\dev\\tessel\\tessellationstudio",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32",
+        "nodeExecutable": "C:\\Program Files\\nodejs\\node.EXE",
+        "nodeVersion": "v22.18.0",
+        "packageManager": "npm",
+        "packageManagerExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+        "packageManagerVersion": "10.9.3",
+        "cleanup": {
+          "RootProcessId": 46096,
+          "Completed": true,
+          "ProcessesObserved": 4,
+          "ProcessesTerminated": 4,
+          "Failure": null
+        }
+      }
+    ]
+  }
+}
