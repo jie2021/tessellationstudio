@@ -1,6 +1,6 @@
 # Google Play 포팅 및 AAB 빌드 절차
 
-이 문서는 Tessellation Studio 웹 앱을 Capacitor Android 앱으로 포팅하고
+이 문서는 TStudio 웹 앱을 Capacitor Android 앱으로 포팅하고
 Google Play 배포용 Android App Bundle(AAB)을 준비하는 실제 절차를 기록합니다.
 
 ## 1. 포팅 구조
@@ -17,16 +17,16 @@ Next.js 소스
 
 현재 앱 설정:
 
-- 앱 이름: `Tessellation Studio`
+- 앱 이름: `TStudio`
 - Android application ID: `com.jie.tessellationstudio`
 - 웹 자산 폴더: `out`
-- 최소 Android API: 23
+- 최소 Android API: 24
 - compile/target SDK: 35
-- Android 버전: `versionCode 1`, `versionName "1.0"`
+- Android 버전: `versionCode 1`, `versionName "1.0.0"`
 
 ## 2. 필요한 환경
 
-- Node.js 20.x 권장
+- Node.js 22.18.0 권장
 - npm
 - JDK 17 이상
 - Android SDK Platform 35
@@ -43,8 +43,8 @@ Next.js 소스
 - Android SDK: `C:\Users\jie\AppData\Local\Android\Sdk`
 - Android SDK Platform/Build Tools 35 사용 가능
 
-프로젝트가 요구하는 Node.js 엔진은 `20.x`이므로 재현 가능한 CI/배포 빌드에서는
-Node.js 20을 사용하는 것이 좋습니다.
+프로젝트가 요구하는 Node.js 엔진은 `22.x`이므로 재현 가능한 CI/배포 빌드에서는
+Node.js 22.18.0을 사용하는 것이 좋습니다.
 
 ## 3. 의존성 설치와 정적 웹 빌드
 

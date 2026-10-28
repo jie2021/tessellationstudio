@@ -26,7 +26,7 @@ try {
   const pid = Number(output.split(/\r?\n/).at(-1));
   if (!Number.isInteger(pid) || pid <= 0) process.exit(0);
 
-  console.log(`Stopping stale Tessellation Studio dev server on port 3000 (PID ${pid})...`);
+  console.log(`Stopping stale TStudio dev server on port 3000 (PID ${pid})...`);
   execFileSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
 } catch (error) {
   if (error.status === 2) {

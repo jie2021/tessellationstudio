@@ -1,6 +1,6 @@
 # 웹 앱을 Windows Electron 앱으로 만드는 매뉴얼
 
-이 문서는 Tessellation Studio의 Next.js 웹 앱을 Electron 기반 Windows 데스크톱 앱으로 개발하고 NSIS 설치 파일로 배포하는 절차를 설명합니다.
+이 문서는 TStudio의 Next.js 웹 앱을 Electron 기반 Windows 데스크톱 앱으로 개발하고 NSIS 설치 파일로 배포하는 절차를 설명합니다.
 
 ## 1. 현재 구조
 
@@ -29,7 +29,7 @@ Next.js 소스
 필요한 환경:
 
 - Windows 10 또는 Windows 11
-- Node.js 20.x
+- Node.js 22.18.0
 - npm
 - 인터넷 연결: 최초 Electron 바이너리 다운로드에 필요
 
@@ -191,7 +191,7 @@ Windows 설치 프로그램 설정:
 {
   "build": {
     "appId": "com.tessellationstudio.desktop",
-    "productName": "Tessellation Studio",
+    "productName": "TStudio",
     "files": [
       "electron/**/*",
       "out/**/*",
@@ -251,8 +251,8 @@ npm run build:desktop
 주요 결과물:
 
 ```text
-dist/win-unpacked/Tessellation Studio.exe
-dist/Tessellation Studio Setup 0.0.1.exe
+dist/win-unpacked/TStudio.exe
+dist/TStudio Setup 1.0.0.exe
 ```
 
 - `win-unpacked` 실행 파일은 설치 없이 빠르게 확인할 때 사용합니다.

@@ -1,4 +1,4 @@
-# Tessellation Studio
+# TStudio
 
 ## User Manuals
 
@@ -14,7 +14,7 @@
 - [Google Play 포팅 및 AAB 빌드 절차](docs/GOOGLE-PLAY-PORTING-PROCESS.md)
 
 ## Prerequisites
-- Node.js 18+ (recommended)
+- Node.js 22.18.0 (see `.nvmrc`)
 - npm (or use pnpm/yarn if preferred)
 
 ## Install

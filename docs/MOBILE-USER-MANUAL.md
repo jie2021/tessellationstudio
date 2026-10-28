@@ -1,6 +1,6 @@
-# Tessellation Studio 모바일 사용 매뉴얼
+# TStudio 모바일 사용 매뉴얼
 
-이 문서는 Android 앱과 모바일 브라우저에서 Tessellation Studio로 반복 패턴을 만드는 방법을 설명합니다.
+이 문서는 Android 앱과 모바일 브라우저에서 TStudio로 반복 패턴을 만드는 방법을 설명합니다.
 
 ## 1. 화면 구성
 

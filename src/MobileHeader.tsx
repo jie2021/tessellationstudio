@@ -26,7 +26,7 @@ function MobileHeader({
         <Menu size={24} />
       </button>
       <span className="text-sm font-bold tracking-tight text-neutral-900">
-        Tessellation <span className="text-indigo-600">Studio</span>
+        TStudio
       </span>
       <button
         type="button"

@@ -1,5 +1,5 @@
 {
-  "name": "Tessellation Studio",
+  "name": "TStudio",
   "description": "Create beautiful Escher-style tessellations by modifying the edges of triangles, squares, and hexagons.",
   "requestFramePermissions": []
 }

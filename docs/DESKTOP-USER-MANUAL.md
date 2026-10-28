@@ -1,6 +1,6 @@
-# Tessellation Studio 데스크톱 사용 매뉴얼
+# TStudio 데스크톱 사용 매뉴얼
 
-이 문서는 Windows Electron 앱과 데스크톱 웹 브라우저에서 Tessellation Studio를 사용하는 방법을 설명합니다.
+이 문서는 Windows Electron 앱과 데스크톱 웹 브라우저에서 TStudio를 사용하는 방법을 설명합니다.
 
 ## 1. 화면 구성
 

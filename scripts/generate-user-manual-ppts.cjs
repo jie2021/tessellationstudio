@@ -32,7 +32,7 @@ for (const source of [mobileSource, desktopSource]) {
 function createDeck(subject) {
   const pptx = new pptxgen();
   pptx.layout = 'LAYOUT_WIDE';
-  pptx.author = 'Tessellation Studio';
+  pptx.author = 'TStudio';
   pptx.company = 'JIE Inc.';
   pptx.subject = subject;
   pptx.title = subject;
@@ -108,7 +108,7 @@ function addPhone(slide, x, y, w, h) {
   slide.addShape(SHAPE.roundRect, { x: x + w * 0.34, y: y + 0.06, w: w * 0.32, h: 0.11, rectRadius: 0.04, fill: { color: C.ink }, line: { color: C.ink } });
   slide.addShape(SHAPE.rect, { x: x + 0.12, y: y + 0.25, w: w - 0.24, h: 0.48, fill: { color: C.white }, line: { color: C.line } });
   slide.addText('☰', { x: x + 0.25, y: y + 0.36, w: 0.25, h: 0.18, fontFace: FONT, fontSize: 13, bold: true, color: C.ink, margin: 0 });
-  slide.addText('Tessellation Studio', { x: x + 0.65, y: y + 0.36, w: w - 1.3, h: 0.18, fontFace: FONT, fontSize: 9.5, bold: true, align: 'center', color: C.ink, margin: 0, fit: 'shrink' });
+  slide.addText('TStudio', { x: x + 0.65, y: y + 0.36, w: w - 1.3, h: 0.18, fontFace: FONT, fontSize: 9.5, bold: true, align: 'center', color: C.ink, margin: 0, fit: 'shrink' });
   slide.addText('▣', { x: x + w - 0.52, y: y + 0.36, w: 0.25, h: 0.18, fontFace: FONT, fontSize: 12, bold: true, color: C.blue, margin: 0 });
   addPattern(slide, x + 0.25, y + 1.0, 0.68);
   slide.addShape(SHAPE.ellipse, { x: x + w * 0.34, y: y + h * 0.43, w: w * 0.32, h: w * 0.32, fill: { color: C.blueSoft, transparency: 12 }, line: { color: C.blue, width: 1.5 } });
@@ -256,7 +256,7 @@ function addTroubleshootingSlide(pptx, edition, items) {
 }
 
 async function buildMobile() {
-  const pptx = createDeck('Tessellation Studio 모바일 사용 매뉴얼');
+  const pptx = createDeck('TStudio 모바일 사용 매뉴얼');
   addCover(pptx, 'MOBILE', 'Android 앱 · 모바일 웹 브라우저', 'mobile');
   addOverviewSlide(pptx, 'MOBILE', 'mobile', [
     '왼쪽 메뉴에서 도형·색상·변형을 설정합니다.',
@@ -294,7 +294,7 @@ async function buildMobile() {
 }
 
 async function buildDesktop() {
-  const pptx = createDeck('Tessellation Studio 데스크톱 사용 매뉴얼');
+  const pptx = createDeck('TStudio 데스크톱 사용 매뉴얼');
   addCover(pptx, 'DESKTOP', 'Windows Electron 앱 · 데스크톱 웹 브라우저', 'desktop');
   addOverviewSlide(pptx, 'DESKTOP', 'desktop', [
     '왼쪽 설정 패널에서 작업 조건을 선택합니다.',

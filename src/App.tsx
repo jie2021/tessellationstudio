@@ -1,5 +1,5 @@
 // App.tsx
-// Main application component for Tessellation Studio.
+// Main application component for TStudio.
 // - Manages global UI state (selected shape, colors, zoom, demo modes, editor state).
 // - Computes base vertices for regular shapes and maintains editable edge control points.
 // - Delegates shape-specific editing, demo steps, and control rendering to
@@ -259,7 +259,6 @@ export default function App() {
     right:  (viewportSize.w - offset.x) / zoom,
     bottom: (viewportSize.h - offset.y) / zoom,
   }), [offset.x, offset.y, zoom, viewportSize.w, viewportSize.h]);
-
   const baseVertices = useMemo(() => getBaseVertices(shapeType), [shapeType]);
 
   // Initialize edge paths if empty

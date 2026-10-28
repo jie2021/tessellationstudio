@@ -1,6 +1,6 @@
 # 웹 앱을 Android Capacitor 앱으로 만드는 매뉴얼
 
-이 문서는 Tessellation Studio의 Next.js 웹 앱을 Capacitor 기반 Android 앱으로 개발하고 APK 또는 AAB로 배포하는 절차를 설명합니다.
+이 문서는 TStudio의 Next.js 웹 앱을 Capacitor 기반 Android 앱으로 개발하고 APK 또는 AAB로 배포하는 절차를 설명합니다.
 
 ## 1. 현재 구조
 
@@ -28,7 +28,7 @@ Next.js 소스
 
 필요한 환경:
 
-- Node.js 20.x
+- Node.js 22.18.0
 - npm
 - Android Studio
 - Android SDK Platform 35
@@ -53,12 +53,12 @@ C:\Android\Sdk
 현재 프로젝트의 Android 설정은 다음 버전을 사용합니다.
 
 ```text
-minSdkVersion = 23
-compileSdkVersion = 35
-targetSdkVersion = 35
+minSdkVersion = 24
+compileSdkVersion = 36
+targetSdkVersion = 36
 ```
 
-따라서 Android 6.0, API 23 이상을 지원합니다.
+따라서 Android 7.0, API 24 이상을 지원합니다.
 
 ## 3. JAVA_HOME 설정
 
@@ -150,7 +150,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.jie.tessellationstudio',
-  appName: 'Tessellation Studio',
+  appName: 'TStudio',
   webDir: 'out',
 };
 
@@ -160,7 +160,7 @@ export default config;
 각 항목:
 
 - `appId`: Android applicationId. Play Store에서 앱을 식별하는 고유 ID입니다.
-- `appName`: 사용자에게 표시되는 앱 이름입니다.
+- `appName`: 사용자에게 표시되는 앱 이름입니다. 이 프로젝트에서는 `TStudio`입니다.
 - `webDir`: Android 프로젝트에 복사할 웹 빌드 폴더입니다.
 
 `appId`는 출시 후 변경하지 않는 것이 원칙입니다. 변경하면 Play Store에서 다른 앱으로 취급될 수 있습니다.

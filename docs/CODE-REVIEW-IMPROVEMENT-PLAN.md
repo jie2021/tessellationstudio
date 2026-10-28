@@ -1,4 +1,4 @@
-# Tessellation Studio 코드 리뷰 및 개선 계획
+# TStudio 코드 리뷰 및 개선 계획
 
 - **검토일:** 2026-09-30
 - **검토 범위:** React/TypeScript 앱, SVG 패턴 편집, 모바일/데스크톱 UI, Next.js 정적 export, Electron, Capacitor, 스크립트, 프로젝트 문서
@@ -21,7 +21,7 @@
 | R-04 | P2 | 접근성 | 조절점 렌더러는 포인터 이벤트를 제공하지만 키보드 포커스, 이름, 키보드 이동 동작은 제공하지 않습니다([Triangle.tsx](../src/Triangle.tsx#L363-L380), [Square.tsx](../src/Square.tsx#L386-L402), [Hexagon.tsx](../src/Hexagon.tsx#L293-L309)). 앱의 핵심 편집 기능을 키보드만으로 사용할 수 없습니다. |
 | R-05 | P2 | 모바일 접근성 | 모바일 메뉴는 닫힌 상태에서도 DOM에 남고 화면 밖 이동 스타일만 적용됩니다([App.tsx](../src/App.tsx#L498-L506)). 키보드 탭 순서와 보조 기술에 닫힌 메뉴 항목이 남을 수 있으며, 메뉴 열기/닫기 시 포커스 관리도 없습니다. |
 | R-06 | P2 | 곡선 편집 | 곡선 경로는 제어점이 2개 이상일 때 첫 점과 마지막 점만 사용합니다([App.tsx](../src/App.tsx#L448-L476)). 자유형에서 추가한 중간 제어점은 직선 모드에서는 경로에 포함되지만 곡선 모드에서는 시각적으로 조작 가능함에도 결과 곡선에 영향을 주지 않을 수 있습니다. |
-| R-07 | P2 | 런타임·문서 | README는 Node.js 18 이상을 권장하지만 [package.json](../package.json#L49-L53)은 Node 20.x를 지정합니다. 또한 [next.config.mjs](../next.config.mjs#L1-L6)는 정적 export를 설정하는 반면 README는 `next start`로 production 실행을 안내합니다([README.md](../README.md#L36-L48)). 지원 런타임과 웹 배포 절차가 일관되지 않습니다. |
+| R-07 | P2 | 런타임·문서 | Node.js 런타임은 Node.js 22.18.0으로 통일되었고 [package.json](../package.json#L53-L55), [.nvmrc](../.nvmrc), [CI workflow](../.github/workflows/ci.yml)에서 동일 기준을 사용합니다. 정적 export와 `next start` 배포 안내의 차이는 별도 배포 문서 정리 항목으로 남아 있습니다. |
 | R-08 | P3 | 데모 복구 | 사각형 데모 시작은 편집기를 숨기지만([Square.tsx](../src/Square.tsx#L591-L600)), 종료 함수는 데모 상태만 해제하고 편집기 표시 상태를 복구하지 않습니다([Square.tsx](../src/Square.tsx#L602-L613)). 사용자가 데모를 종료한 뒤 편집기가 접힌 채 남을 수 있습니다. |
 | R-09 | P3 | 접근성 상태 | 격자 토글은 상태를 바꾸지만 pressed 상태를 보조 기술에 알리지 않습니다([FloatingToolbar.tsx](../src/FloatingToolbar.tsx#L24-L36)). 도형 버튼도 선택 모양만 표시합니다([App.tsx](../src/App.tsx#L533-L549)). |
 | R-10 | P3 | 테스트 | [package.json](../package.json#L6-L24)의 `lint`는 `tsc --noEmit`만 실행하고 테스트 명령이 없습니다. 저장소에서 테스트/스펙 파일도 발견되지 않았으므로 상호작용 및 export 회귀를 자동 검출할 기반이 부족합니다. |
